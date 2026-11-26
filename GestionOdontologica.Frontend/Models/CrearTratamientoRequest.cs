@@ -19,4 +19,7 @@ public sealed class CrearTratamientoRequest
     [Range(typeof(decimal), "0", "99999999.99",
         ErrorMessage = "El precio debe ser mayor o igual a cero.")]
     public decimal Precio { get; set; }
+
+    [Range(5, 480, ErrorMessage = "La duración debe estar entre 5 y 480 minutos.")]
+    public int DuracionMinutos { get; set; } = 30;
 }

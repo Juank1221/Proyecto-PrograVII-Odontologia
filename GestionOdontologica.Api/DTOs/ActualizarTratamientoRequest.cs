@@ -23,4 +23,7 @@ public sealed class ActualizarTratamientoRequest
         ParseLimitsInInvariantCulture = true,
         ErrorMessage = "El precio debe ser mayor o igual a cero y no superar el límite permitido.")]
     public decimal Precio { get; set; }
+
+    [Range(5, 480, ErrorMessage = "La duración debe estar entre 5 y 480 minutos.")]
+    public int DuracionMinutos { get; set; } = 30;
 }

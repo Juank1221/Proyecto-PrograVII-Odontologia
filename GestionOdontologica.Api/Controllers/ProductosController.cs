@@ -1,3 +1,5 @@
+
+using System.Security.Claims;
 using GestionOdontologica.Api.Data;
 using GestionOdontologica.Api.DTOs;
 using GestionOdontologica.Api.Security;
@@ -34,7 +36,9 @@ public sealed class ProductosController : ControllerBase
     public async Task<ActionResult<SiguienteCodigoDto>> ObtenerSiguienteCodigo(
         CancellationToken cancellationToken)
     {
-        var codigo = await _productoRepository.ObtenerSiguienteCodigoAsync(cancellationToken);
+        var codigo = await _productoRepository.ObtenerSiguienteCodigoAsync(
+            cancellationToken);
+
         return Ok(new SiguienteCodigoDto { Codigo = codigo });
     }
 
@@ -48,10 +52,16 @@ public sealed class ProductosController : ControllerBase
     {
         if (id <= 0)
         {
-            return BadRequest(new { mensaje = "El ID del producto debe ser mayor que cero." });
+            return BadRequest(new
+            {
+                mensaje = "El ID del producto debe ser mayor que cero."
+            });
         }
 
-        var producto = await _productoRepository.ObtenerPorIdAsync(id, cancellationToken);
+        var producto = await _productoRepository.ObtenerPorIdAsync(
+            id,
+            cancellationToken);
+
         return producto is null ? NotFound() : Ok(producto);
     }
 
@@ -60,6 +70,7 @@ public sealed class ProductosController : ControllerBase
     [ProducesResponseType(typeof(ProductoDto), StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(StatusCodes.Status401Unauthorized)]
     public async Task<ActionResult<ProductoDto>> AumentarExistencia(
         int id,
         [FromBody] AumentoExistenciaDto dto,
@@ -67,20 +78,54 @@ public sealed class ProductosController : ControllerBase
     {
         if (id <= 0)
         {
-            return BadRequest(new { mensaje = "El ID del producto debe ser mayor que cero." });
+            return BadRequest(new
+            {
+                mensaje = "El ID del producto debe ser mayor que cero."
+            });
         }
 
         if (dto.IdProducto != id)
         {
-            return BadRequest(new { mensaje = "El producto indicado no coincide con el producto seleccionado." });
+            return BadRequest(new
+            {
+                mensaje = "El producto indicado no coincide con el producto seleccionado."
+            });
         }
 
         if (dto.Cantidad <= 0)
         {
-            return BadRequest(new { mensaje = "La cantidad que desea agregar debe ser un número entero mayor que cero." });
+            return BadRequest(new
+            {
+                mensaje = "La cantidad debe ser mayor que cero."
+            });
         }
 
-        var producto = await _productoRepository.AumentarExistenciaAsync(id, dto.Cantidad, cancellationToken);
+        if (string.IsNullOrWhiteSpace(dto.NumeroLote))
+        {
+            return BadRequest(new
+            {
+                mensaje = "Debe indicar el número de lote."
+            });
+        }
+
+        var identificadorUsuario = User.FindFirstValue(
+            ClaimTypes.NameIdentifier);
+
+        if (!int.TryParse(identificadorUsuario, out var idUsuario) ||
+            idUsuario <= 0)
+        {
+            return Unauthorized(new
+            {
+                mensaje = "No fue posible identificar al usuario autenticado."
+            });
+        }
+
+        var producto = await _productoRepository.AumentarExistenciaAsync(
+            id,
+            dto,
+            idUsuario,
+            cancellationToken);
+
         return producto is null ? NotFound() : Ok(producto);
     }
 
@@ -92,7 +137,9 @@ public sealed class ProductosController : ControllerBase
         [FromBody] CreacionProductoDto dto,
         CancellationToken cancellationToken)
     {
-        var producto = await _productoRepository.InsertarAsync(dto, cancellationToken);
+        var producto = await _productoRepository.InsertarAsync(
+            dto,
+            cancellationToken);
 
         return CreatedAtAction(
             nameof(ObtenerPorId),
@@ -112,17 +159,26 @@ public sealed class ProductosController : ControllerBase
     {
         if (id <= 0)
         {
-            return BadRequest(new { mensaje = "El ID del producto debe ser mayor que cero." });
+            return BadRequest(new
+            {
+                mensaje = "El ID del producto debe ser mayor que cero."
+            });
         }
 
-        var actualizado = await _productoRepository.ActualizarAsync(id, dto, cancellationToken);
+        var actualizado = await _productoRepository.ActualizarAsync(
+            id,
+            dto,
+            cancellationToken);
 
         if (!actualizado)
         {
             return NotFound();
         }
 
-        var producto = await _productoRepository.ObtenerPorIdAsync(id, cancellationToken);
+        var producto = await _productoRepository.ObtenerPorIdAsync(
+            id,
+            cancellationToken);
+
         return producto is null ? NotFound() : Ok(producto);
     }
 
@@ -130,14 +186,20 @@ public sealed class ProductosController : ControllerBase
     [Authorize(Policy = PermisoCodigos.InventarioDesactivar)]
     [ProducesResponseType(StatusCodes.Status204NoContent)]
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
-    public async Task<IActionResult> Desactivar(int id, CancellationToken cancellationToken)
+    public async Task<IActionResult> Desactivar(
+        int id,
+        CancellationToken cancellationToken)
     {
         if (id <= 0)
         {
-            return BadRequest(new { mensaje = "El ID del producto debe ser mayor que cero." });
+            return BadRequest(new
+            {
+                mensaje = "El ID del producto debe ser mayor que cero."
+            });
         }
 
         await _productoRepository.DesactivarAsync(id, cancellationToken);
+
         return NoContent();
     }
 
@@ -145,14 +207,20 @@ public sealed class ProductosController : ControllerBase
     [Authorize(Policy = PermisoCodigos.InventarioDesactivar)]
     [ProducesResponseType(StatusCodes.Status204NoContent)]
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
-    public async Task<IActionResult> Reactivar(int id, CancellationToken cancellationToken)
+    public async Task<IActionResult> Reactivar(
+        int id,
+        CancellationToken cancellationToken)
     {
         if (id <= 0)
         {
-            return BadRequest(new { mensaje = "El ID del producto debe ser mayor que cero." });
+            return BadRequest(new
+            {
+                mensaje = "El ID del producto debe ser mayor que cero."
+            });
         }
 
         await _productoRepository.ActivarAsync(id, cancellationToken);
+
         return NoContent();
     }
 }
