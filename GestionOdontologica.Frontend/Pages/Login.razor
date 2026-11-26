@@ -76,11 +76,6 @@
                     <ValidationMessage For="() => _modelo.Password" />
                 </div>
 
-                <label class="checkbox-control">
-                    <InputCheckbox @bind-Value="_modelo.Recordarme" />
-                    <span>Recordarme por 7 días en este equipo</span>
-                </label>
-
                 <button type="submit" class="button button--primary auth-submit" disabled="@_enviando">
                     @if (_enviando)
                     {
@@ -111,9 +106,6 @@
     private string _iconoError = "#icon-alert";
     private string _claseAlertaError = "auth-alert--error";
 
-    [SupplyParameterFromQuery(Name = "returnUrl")]
-    public string? ReturnUrl { get; set; }
-
     [SupplyParameterFromQuery(Name = "motivo")]
     public string? Motivo { get; set; }
 
@@ -125,7 +117,7 @@
 
         if (Sesion.EsAutenticado)
         {
-            Navigation.NavigateTo(ObtenerDestino(), replace: true);
+            Navigation.NavigateTo("inicio", replace: true);
             return;
         }
 
@@ -190,7 +182,7 @@
                 ToastTipo.Exito,
                 4000);
 
-            Navigation.NavigateTo(ObtenerDestino(), replace: true);
+            Navigation.NavigateTo("inicio", replace: true);
         }
         catch (ApiException ex)
         {
@@ -245,31 +237,6 @@
                 _claseAlertaError = "auth-alert--error";
                 break;
         }
-    }
-
-    private string ObtenerDestino()
-    {
-        if (string.IsNullOrWhiteSpace(ReturnUrl))
-        {
-            return "usuarios";
-        }
-
-        var destino = ReturnUrl.Trim();
-
-        if (!destino.StartsWith('/'))
-        {
-            destino = "/" + destino;
-        }
-
-        // Solo se permiten rutas internas: evita redirecciones a otros orígenes.
-        if (destino.StartsWith("//", StringComparison.Ordinal)
-            || destino.Contains("://", StringComparison.Ordinal)
-            || destino.StartsWith("/login", StringComparison.OrdinalIgnoreCase))
-        {
-            return "usuarios";
-        }
-
-        return destino.TrimStart('/');
     }
 
     private static string ObtenerPrimerNombre(string nombreCompleto)

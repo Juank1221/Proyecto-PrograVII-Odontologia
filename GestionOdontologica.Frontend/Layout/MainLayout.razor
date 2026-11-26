@@ -4,6 +4,7 @@
 @inject ApiStatusService ApiStatus
 @inject ToastService Toasts
 @inject SesionService Sesion
+@inject AuthApiService Auth
 
 <div class="app-shell @(_menuAbierto ? "sidebar-open" : string.Empty)">
     <aside class="sidebar" id="sidebar" aria-label="Menú principal">
@@ -298,6 +299,10 @@
     private async Task CerrarSesion()
     {
         _menuAbierto = false;
+
+        // La API registra el cierre con la IP de origen antes de borrar el
+        // token local. Si la API no responde, la sesión se cierra igual.
+        await Auth.CerrarSesionAsync();
 
         await Sesion.CerrarSesionAsync();
 

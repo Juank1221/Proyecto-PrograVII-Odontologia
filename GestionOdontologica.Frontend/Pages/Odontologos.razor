@@ -18,14 +18,8 @@
         </div>
     </header>
 
-    <div class="usuarios-layout">
-        <section class="usuarios-card usuarios-card--form">
-            <header class="usuarios-card__header">
-                <div>
-                    <h2>@(Editando ? "Editar odontólogo" : "Nuevo odontólogo")</h2>
-                    <p>@(Editando ? "Actualiza los datos del perfil clínico del odontólogo." : "Vincula el perfil clínico con una cuenta de usuario de forma atómica.")</p>
-                </div>
-            </header>
+    <div class="usuarios-layout usuarios-layout--stack">
+        <Drawer Visible="_mostrarFormulario" Titulo="@(Editando ? "Editar odontólogo" : "Nuevo odontólogo")" Subtitulo="@(Editando ? "Actualiza los datos del perfil clínico del odontólogo." : "Vincula el perfil clínico con una cuenta de usuario de forma atómica.")" OnCerrar="CerrarFormulario">
             @if (!Editando)
             {
                 <div class="form-section">
@@ -34,7 +28,7 @@
                         <p>Selecciona un usuario sin odontólogo o crea uno nuevo</p>
                     </div>
                     <div class="form-grid">
-                        <div class="form-field form-field--span-2">
+                        <div class="form-field form-field--span-4">
                             <label>Tipo de vinculación</label>
                             <InputSelect class="form-control" @bind-Value="TipoVinculacion" @bind-Value:after="OnTipoVinculacionChanged">
                                 <option value="VINCULAR">Vincular a usuario con rol Odontólogo</option>
@@ -46,7 +40,7 @@
                     @if (TipoVinculacion == "VINCULAR")
                     {
                         <div class="form-grid">
-                            <div class="form-field form-field--span-2">
+                            <div class="form-field form-field--span-4">
                                 <label>Usuario disponible *</label>
                                 <InputSelect class="form-control" @bind-Value="UsuarioSeleccionadoId" @bind-Value:after="OnUsuarioSeleccionadoChanged">
                                     <option value="0">Seleccione un usuario...</option>
@@ -113,7 +107,7 @@
                             <InputText class="form-control" @bind-Value="Formulario.NumeroColegiado" />
                             <ValidationMessage For="@(() => Formulario.NumeroColegiado)" />
                         </div>
-                        <div class="form-field">
+                        <div class="form-field form-field--span-4">
                             <label>Especialidad</label>
                             <InputSelect class="form-control" @bind-Value="Formulario.Especialidad">
                                 <option value="">Seleccione una especialidad...</option>
@@ -150,16 +144,21 @@
                     <button class="btn btn--ghost" type="button" @onclick="CancelarEdicion" disabled="@Guardando">Cancelar</button>
                 </div>
             </EditForm>
-        </section>
+        </Drawer>
 
-        <section class="usuarios-card usuarios-card--list">
+        <section class="usuarios-card usuarios-card--list odontologos-listado">
             <header class="usuarios-card__header">
                 <div>
                     <h2>Listado de odontólogos</h2>
                     <p>@ListaOdontologos.Count odontólogo(s) registrados</p>
                 </div>
                 <div class="usuarios-card__header-actions">
-                    <input class="form-control usuarios-search" placeholder="Buscar por nombre, apellido, colegiado o correo..." @bind="Filtro" @bind:event="oninput" />
+                    <button type="button" class="btn btn--primary" @onclick="AbrirNuevo"><svg class="icon" aria-hidden="true"><use href="#icon-plus"></use></svg><span>Nuevo odontólogo</span></button>
+                    <BuscadorEspecifico Campos="CamposBusqueda"
+                                        Campo="@_campoBusqueda"
+                                        CampoChanged="CambiarCampoBusqueda"
+                                        Texto="@Filtro"
+                                        TextoChanged="CambiarFiltro" />
                 </div>
             </header>
 
@@ -173,7 +172,7 @@
             }
             else
             {
-                <div class="table-wrapper">
+                <div class="table-wrapper table-wrapper--acciones">
                     <table class="usuarios-table">
                         <thead>
                             <tr>
@@ -202,26 +201,57 @@
                                     <td>
                                         @if (odontologo.IdUsuario.HasValue)
                                         {
-                                            <span class="badge badge--info">ID @odontologo.IdUsuario.Value</span>
+                                            <span class="badge badge--info">Vinculado</span>
                                         }
                                         else
                                         {
                                             <span class="usuarios-table__meta">Sin vincular</span>
                                         }
                                     </td>
-                                    <td><span class="badge @(odontologo.Activo ? "badge--success" : "badge--danger")">@(odontologo.Activo ? "Activo" : "Inactivo")</span></td>
+                                    <td><span class="status-pill @(odontologo.Activo ? "status-pill--active" : "status-pill--muted")"><span aria-hidden="true"></span>@(odontologo.Activo ? "Activo" : "Inactivo")</span></td>
                                     <td class="usuarios-table__actions">
-                                        <button class="btn btn--ghost btn--sm" @onclick="() => Editar(odontologo)">Editar</button>
-                                        <button class="btn btn--ghost btn--sm" @onclick="() => AbrirHorarios(odontologo)">Horarios</button>
-                                        <button class="btn btn--ghost btn--sm" @onclick="() => AbrirTratamientos(odontologo)">Tratamientos</button>
-                                        @if (odontologo.Activo)
-                                        {
-                                            <button class="btn btn--ghost btn--sm" @onclick="() => SolicitarCambioEstado(odontologo, false)">Desactivar</button>
-                                        }
-                                        else
-                                        {
-                                            <button class="btn btn--ghost btn--sm" @onclick="() => SolicitarCambioEstado(odontologo, true)">Activar</button>
-                                        }
+                                        <div class="action-buttons-group">
+                                            <button type="button"
+                                                    class="btn-action btn-action--edit"
+                                                    title="Editar datos de @odontologo.Nombres @odontologo.Apellidos"
+                                                    aria-label="Editar datos de @odontologo.Nombres @odontologo.Apellidos"
+                                                    @onclick="() => Editar(odontologo)">
+                                                <svg class="icon" aria-hidden="true"><use href="#icon-edit"></use></svg>
+                                                <span>Editar</span>
+                                            </button>
+                                            @if (odontologo.Activo)
+                                            {
+                                                <button type="button"
+                                                        class="btn-action btn-action--danger"
+                                                        title="Dar de baja a @odontologo.Nombres @odontologo.Apellidos"
+                                                        aria-label="Dar de baja a @odontologo.Nombres @odontologo.Apellidos"
+                                                        @onclick="() => SolicitarCambioEstado(odontologo, false)">
+                                                    <svg class="icon" aria-hidden="true"><use href="#icon-trash"></use></svg>
+                                                    <span>Desactivar</span>
+                                                </button>
+                                            }
+                                            else
+                                            {
+                                                <button type="button"
+                                                        class="btn-action btn-action--success"
+                                                        title="Reactivar a @odontologo.Nombres @odontologo.Apellidos"
+                                                        aria-label="Reactivar a @odontologo.Nombres @odontologo.Apellidos"
+                                                        @onclick="() => SolicitarCambioEstado(odontologo, true)">
+                                                    <svg class="icon" aria-hidden="true"><use href="#icon-user-check"></use></svg>
+                                                    <span>Activar</span>
+                                                </button>
+                                            }
+                                            <MenuAcciones Titulo="Más acciones">
+                                                <button type="button" class="menu-acciones__item" role="menuitem" @onclick="() => AbrirHorarios(odontologo)">
+                                                    <svg class="icon" aria-hidden="true"><use href="#icon-clock"></use></svg>
+                                                    <span>Horarios</span>
+                                                </button>
+                                                <button type="button" class="menu-acciones__item" role="menuitem" @onclick="() => AbrirTratamientos(odontologo)">
+                                                    <svg class="icon" aria-hidden="true"><use href="#icon-tooth"></use></svg>
+                                                    <span>Tratamientos</span>
+                                                </button>
+                                            </MenuAcciones>
+                                        </div>
                                     </td>
                                 </tr>
                             }
@@ -439,7 +469,7 @@
                             <div class="combo__menu">
                                 @if (!TratamientosDisponiblesFiltrados.Any())
                                 {
-                                    <div class="combo__empty">No hay tratamientos activos que coincidan con la búsqueda.</div>
+                                    <div class="combo__empty">No hay tratamientos que coincidan con la búsqueda.</div>
                                 }
                                 else
                                 {
@@ -471,7 +501,7 @@
                     <div class="treatment-assign__footer">
                         <span class="treatment-assign__hint">
                             @(TratamientoSeleccionado is null
-                                ? "Selecciona un tratamiento activo del catálogo para vincularlo."
+                                ? "Selecciona un tratamiento del catálogo para vincularlo."
                                 : "Tratamiento seleccionado listo para asociar.")
                         </span>
                         <button type="button" class="btn btn--primary" @onclick="AsociarTratamientoAsync" disabled="@(GuardandoTratamientos || TratamientoAAsociarId == 0)">
@@ -534,6 +564,7 @@
     private bool Cargando = true;
     private bool Guardando = false;
     private bool Editando = false;
+    private bool _mostrarFormulario;
     private int? IdOdontologoEditando;
 
     private OdontologoForm Formulario = new();
@@ -596,9 +627,38 @@
     private const int MinutoInicioCalendario = 6 * 60;
     private const int MinutoFinCalendario = 21 * 60;
 
+    private static readonly IReadOnlyList<CampoBusqueda> CamposBusqueda =
+    [
+        new("nombre", "Nombre", "Ej. Ana Gómez"),
+        new("colegiado", "Nº colegiado", "Ej. CO-12345"),
+        new("especialidad", "Especialidad", "Ej. Ortodoncia"),
+        new("correo", "Correo", "Ej. odontologo@correo.com")
+    ];
+
+    private string _campoBusqueda = "nombre";
+
+    private void CambiarCampoBusqueda(string campo)
+    {
+        _campoBusqueda = campo;
+        _paginacion.Reiniciar();
+    }
+
+    private void CambiarFiltro(string texto) => Filtro = texto;
+
     private IEnumerable<OdontologoDto> OdontologosFiltrados => string.IsNullOrWhiteSpace(Filtro)
         ? ListaOdontologos
-        : ListaOdontologos.Where(o => ($"{o.Nombres} {o.Apellidos} {o.NumeroColegiado} {o.Correo} {o.Especialidad}").Contains(Filtro, StringComparison.OrdinalIgnoreCase));
+        : ListaOdontologos.Where(o => CoincideBusqueda(o, Filtro.Trim()));
+
+    private bool CoincideBusqueda(OdontologoDto odontologo, string termino) => _campoBusqueda switch
+    {
+        "colegiado" => Contiene(odontologo.NumeroColegiado, termino),
+        "especialidad" => Contiene(odontologo.Especialidad, termino),
+        "correo" => Contiene(odontologo.Correo, termino),
+        _ => Contiene($"{odontologo.Nombres} {odontologo.Apellidos}", termino)
+    };
+
+    private static bool Contiene(string? valor, string termino) =>
+        !string.IsNullOrEmpty(valor) && valor.Contains(termino, StringComparison.OrdinalIgnoreCase);
 
     private List<OdontologoDto> OdontologosPagina => _paginacion.Aplicar(OdontologosFiltrados).ToList();
 
@@ -637,11 +697,9 @@
                 .Where(t => t.AsociadoActivo == true)
                 .Select(t => t.IdTratamiento)
                 .ToHashSet();
-
             var texto = BusquedaTratamiento.Trim();
 
             return CatalogoTratamientos
-                .Where(t => t.Activo)
                 .Where(t => !asociados.Contains(t.IdTratamiento))
                 .Where(t => texto.Length == 0
                     || $"{t.CodigoTratamiento} {t.Nombre}".Contains(texto, StringComparison.OrdinalIgnoreCase))
@@ -677,18 +735,7 @@
     {
         try
         {
-            var tratamientos = await TratamientosApi.ObtenerTodosAsync();
-
-            CatalogoTratamientos = tratamientos
-                .Where(t => t.Activo)
-                .ToList();
-
-            if (TratamientoSeleccionado is not null &&
-                !CatalogoTratamientos.Any(t => t.IdTratamiento == TratamientoSeleccionado.IdTratamiento))
-            {
-                TratamientoSeleccionado = null;
-                TratamientoAAsociarId = 0;
-            }
+            CatalogoTratamientos = (await TratamientosApi.ObtenerTodosAsync()).ToList();
         }
         catch (Exception ex)
         {
@@ -835,9 +882,17 @@
         }
     }
 
+    private void AbrirNuevo()
+    {
+        CancelarEdicion();
+        _mostrarFormulario = true;
+    }
+
+    private void CerrarFormulario() => CancelarEdicion();
     private void Editar(OdontologoDto odontologo)
     {
         Editando = true;
+        _mostrarFormulario = true;
         IdOdontologoEditando = odontologo.IdOdontologo;
         Formulario = new OdontologoForm
         {
@@ -854,6 +909,7 @@
     private void CancelarEdicion()
     {
         Editando = false;
+        _mostrarFormulario = false;
         IdOdontologoEditando = null;
         Formulario = new OdontologoForm();
         TipoVinculacion = "VINCULAR";
@@ -1051,10 +1107,7 @@
         TratamientoSeleccionado = null;
         BusquedaTratamiento = string.Empty;
         MostrarOpcionesTratamiento = false;
-
-        await CargarCatalogoTratamientosAsync();
         await CargarTratamientosAsociadosAsync();
-
         MostrarTratamientos = true;
     }
 
@@ -1073,27 +1126,7 @@
 
     private async Task AsociarTratamientoAsync()
     {
-        if (OdontologoSeleccionado == null || TratamientoAAsociarId == 0)
-        {
-            return;
-        }
-
-        var tratamientoActivo = CatalogoTratamientos.Any(t =>
-            t.IdTratamiento == TratamientoAAsociarId && t.Activo);
-
-        if (!tratamientoActivo)
-        {
-            ToastService.Mostrar(
-                "Tratamiento no disponible",
-                "El tratamiento seleccionado está inactivo o ya no está disponible. Actualiza el catálogo y selecciona otro tratamiento.",
-                ToastTipo.Error);
-
-            TratamientoAAsociarId = 0;
-            TratamientoSeleccionado = null;
-            await CargarCatalogoTratamientosAsync();
-            return;
-        }
-
+        if (OdontologoSeleccionado == null || TratamientoAAsociarId == 0) return;
         try
         {
             GuardandoTratamientos = true;
@@ -1118,13 +1151,6 @@
     private async Task AsociarTratamientoDirectoAsync(int idTratamiento)
     {
         if (OdontologoSeleccionado == null) return;
-
-        if (!CatalogoTratamientos.Any(t => t.IdTratamiento == idTratamiento && t.Activo))
-        {
-            ToastService.Mostrar("Tratamiento no disponible", "No se puede asociar un tratamiento inactivo.", ToastTipo.Error);
-            return;
-        }
-
         try
         {
             await OdontologosApi.AsociarTratamientoAsync(OdontologoSeleccionado.IdOdontologo, idTratamiento);
@@ -1175,12 +1201,6 @@
 
     private void SeleccionarTratamiento(TratamientoDto tratamiento)
     {
-        if (!tratamiento.Activo)
-        {
-            ToastService.Mostrar("Tratamiento no disponible", "No se puede seleccionar un tratamiento inactivo.", ToastTipo.Error);
-            return;
-        }
-
         TratamientoSeleccionado = tratamiento;
         TratamientoAAsociarId = tratamiento.IdTratamiento;
         BusquedaTratamiento = string.Empty;
@@ -1317,10 +1337,12 @@
 
         [Required(ErrorMessage = "Los nombres son obligatorios.")]
         [StringLength(100, ErrorMessage = "Los nombres no pueden superar los 100 caracteres.")]
+        [NombrePersona]
         public string Nombres { get; set; } = string.Empty;
 
         [Required(ErrorMessage = "Los apellidos son obligatorios.")]
         [StringLength(100, ErrorMessage = "Los apellidos no pueden superar los 100 caracteres.")]
+        [NombrePersona]
         public string Apellidos { get; set; } = string.Empty;
 
         [Required(ErrorMessage = "El número de colegiado es obligatorio.")]
@@ -1342,6 +1364,7 @@
     {
         [Required(ErrorMessage = "El nombre completo del usuario es obligatorio.")]
         [StringLength(150, ErrorMessage = "El nombre completo no puede superar los 150 caracteres.")]
+        [NombrePersona]
         public string? NombreCompleto { get; set; }
 
         [Required(ErrorMessage = "El nombre de usuario es obligatorio.")]

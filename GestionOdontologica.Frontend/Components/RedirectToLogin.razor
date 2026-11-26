@@ -10,9 +10,6 @@
             return;
         }
 
-        var destino = string.IsNullOrWhiteSpace(ruta) ? "usuarios" : ruta;
-        var url = $"login?returnUrl={Uri.EscapeDataString("/" + destino.TrimStart('/'))}";
-
-        Navigation.NavigateTo(url, replace: true);
+        Navigation.NavigateTo("login", replace: true);
     }
 }

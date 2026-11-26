@@ -1,6 +1,1191 @@
 @page "/citas"
-@attribute [Authorize]
+@attribute [Authorize(Policy = PermisoCodigos.CitasVer)]
+@using System.Globalization
+@using System.Threading
+@implements IDisposable
+@inject CitasApiService CitasApi
+@inject OdontologosApiService OdontologosApi
+@inject TratamientosApiService TratamientosApi
+@inject PacientesApiService PacientesApi
+@inject ToastService Toasts
+@inject SesionService Sesion
+@inject NavigationManager Nav
 
-<ModuloPendiente Titulo="Citas"
-                 Descripcion="Agenda y seguimiento de las citas de la clínica."
-                 Icono="#icon-calendar" />
+<PageTitle>Agenda de citas | OdontoCare</PageTitle>
+
+<div class="page agenda-page">
+    <header class="agenda-header">
+        <div>
+            <h1>Agenda de citas</h1>
+            <p>Programa, valida y controla la llegada de los pacientes a la clínica.</p>
+        </div>
+        @if (Sesion.TienePermiso(PermisoCodigos.CitasCrear))
+        {
+            <button type="button" class="button button--primary" @onclick="AbrirNuevaCita">
+                <svg class="icon"><use href="#icon-plus"></use></svg>
+                Nueva cita
+            </button>
+        }
+    </header>
+
+    <div class="agenda-toolbar">
+        <label class="agenda-filtro">
+            <span>Fecha</span>
+            <input type="date" @bind="_fecha" @bind:after="CargarCitasAsync" />
+        </label>
+        <label class="agenda-filtro">
+            <span>Odontólogo</span>
+            <select @bind="_filtroOdontologo" @bind:after="CargarCitasAsync">
+                <option value="">Todos</option>
+                @foreach (var odontologo in _odontologos)
+                {
+                    <option value="@odontologo.IdOdontologo">@odontologo.Nombres @odontologo.Apellidos</option>
+                }
+            </select>
+        </label>
+        <div class="agenda-vistas" role="group" aria-label="Vista de la agenda">
+            <button type="button" class="agenda-vista-btn @(!_vistaCalendario ? "is-active" : string.Empty)"
+                    aria-pressed="@(!_vistaCalendario ? "true" : "false")"
+                    @onclick="() => CambiarVistaAsync(false)">Lista</button>
+            <button type="button" class="agenda-vista-btn @(_vistaCalendario ? "is-active" : string.Empty)"
+                    aria-pressed="@(_vistaCalendario ? "true" : "false")"
+                    @onclick="() => CambiarVistaAsync(true)">Calendario</button>
+        </div>
+        <button type="button" class="button button--secondary" @onclick="CargarTodoAsync" disabled="@_cargando">
+            <svg class="icon"><use href="#icon-refresh"></use></svg>
+            Actualizar
+        </button>
+    </div>
+
+    @if (!string.IsNullOrEmpty(_error))
+    {
+        <div class="auth-alert auth-alert--error" role="alert">@_error</div>
+    }
+
+    <div class="agenda-stats">
+        <div class="agenda-stat">
+            <span class="agenda-stat__valor">@_citas.Count</span>
+            <span class="agenda-stat__etiqueta">Citas del día</span>
+        </div>
+        <div class="agenda-stat agenda-stat--programada">
+            <span class="agenda-stat__valor">@_citas.Count(c => c.Estado == "Programada" || c.Estado == "Confirmada")</span>
+            <span class="agenda-stat__etiqueta">Programadas</span>
+        </div>
+        <div class="agenda-stat agenda-stat--espera">
+            <span class="agenda-stat__valor">@_citas.Count(c => c.Estado == "En espera")</span>
+            <span class="agenda-stat__etiqueta">En sala de espera</span>
+        </div>
+        <div class="agenda-stat agenda-stat--completada">
+            <span class="agenda-stat__valor">@_citas.Count(c => c.Estado == "Completada")</span>
+            <span class="agenda-stat__etiqueta">Atendidas</span>
+        </div>
+    </div>
+
+    @if (_vistaCalendario)
+    {
+        <section class="agenda-cal" aria-label="Calendario de citas">
+            <header class="agenda-cal__header">
+                <div class="agenda-vistas" role="group" aria-label="Escala del calendario">
+                    <button type="button" class="agenda-vista-btn @(_escalaCalendario == EscalaCalendario.Dia ? "is-active" : string.Empty)"
+                            aria-pressed="@(_escalaCalendario == EscalaCalendario.Dia ? "true" : "false")"
+                            @onclick="() => CambiarEscalaAsync(EscalaCalendario.Dia)">Diario</button>
+                    <button type="button" class="agenda-vista-btn @(_escalaCalendario == EscalaCalendario.Semana ? "is-active" : string.Empty)"
+                            aria-pressed="@(_escalaCalendario == EscalaCalendario.Semana ? "true" : "false")"
+                            @onclick="() => CambiarEscalaAsync(EscalaCalendario.Semana)">Semanal</button>
+                </div>
+                <span class="agenda-cal__rango">@TextoRangoCalendario</span>
+            </header>
+
+            @if (_escalaCalendario == EscalaCalendario.Dia)
+            {
+                var columnasDia = OdontologosCalendario.ToList();
+
+                @if (columnasDia.Count == 0)
+                {
+                    <div class="table-state"><p>No hay odontólogos activos para mostrar.</p></div>
+                }
+                else
+                {
+                    <div class="agenda-cal__scroll">
+                        <div class="agenda-cal__cabecera">
+                            <span class="agenda-cal__esquina"></span>
+                            <div class="agenda-cal__cabeceras">
+                                @foreach (var odontologo in columnasDia)
+                                {
+                                    <span class="agenda-cal__col-titulo">@odontologo.Nombres @odontologo.Apellidos</span>
+                                }
+                            </div>
+                        </div>
+                        <div class="agenda-cal__cuerpo">
+                            <div class="agenda-cal__horas" aria-hidden="true">
+                                @foreach (var hora in HorasCalendario)
+                                {
+                                    <span class="agenda-cal__hora">@hora.ToString("00"):00</span>
+                                }
+                            </div>
+                            <div class="agenda-cal__columnas">
+                                @foreach (var odontologo in columnasDia)
+                                {
+                                    <div class="agenda-cal__col">
+                                        @foreach (var cita in _citas.Where(c => c.IdOdontologo == odontologo.IdOdontologo))
+                                        {
+                                            <CitaCalendarioBloque Cita="cita" HoraInicio="HoraInicioCalendario" PixelesPorHora="PixelesPorHora" />
+                                        }
+                                    </div>
+                                }
+                            </div>
+                        </div>
+                    </div>
+                }
+            }
+            else
+            {
+                var odontologoSemana = OdontologoSemana;
+
+                @if (odontologoSemana is null)
+                {
+                    <div class="table-state"><p>No hay odontólogos activos para mostrar.</p></div>
+                }
+                else
+                {
+                    <div class="agenda-cal__scroll">
+                        <div class="agenda-cal__cabecera">
+                            <span class="agenda-cal__esquina"></span>
+                            <div class="agenda-cal__cabeceras">
+                                @foreach (var dia in DiasSemana)
+                                {
+                                    <span class="agenda-cal__col-titulo @(dia.Date == DateTime.Today ? "is-hoy" : string.Empty)">@TextoDia(dia)</span>
+                                }
+                            </div>
+                        </div>
+                        <div class="agenda-cal__cuerpo">
+                            <div class="agenda-cal__horas" aria-hidden="true">
+                                @foreach (var hora in HorasCalendario)
+                                {
+                                    <span class="agenda-cal__hora">@hora.ToString("00"):00</span>
+                                }
+                            </div>
+                            <div class="agenda-cal__columnas">
+                                @foreach (var dia in DiasSemana)
+                                {
+                                    <div class="agenda-cal__col">
+                                        @foreach (var cita in CitasDelDia(dia))
+                                        {
+                                            <CitaCalendarioBloque Cita="cita" HoraInicio="HoraInicioCalendario" PixelesPorHora="PixelesPorHora" />
+                                        }
+                                    </div>
+                                }
+                            </div>
+                        </div>
+                    </div>
+                }
+            }
+        </section>
+    }
+
+    <div class="agenda-layout" hidden="@_vistaCalendario">
+        <section class="agenda-card">
+            <header class="agenda-card__header">
+                <div>
+                    <h2>Citas para @_fecha.ToString("dddd, dd MMMM yyyy")</h2>
+                    <p>Las horas ocupadas se muestran con su estado actual.</p>
+                </div>
+                <span class="agenda-card__count">@_citas.Count cita(s)</span>
+            </header>
+
+            @if (_cargando)
+            {
+                <div class="table-state"><strong>Cargando agenda…</strong></div>
+            }
+            else if (_citas.Count == 0)
+            {
+                <div class="table-state">
+                    <span class="table-state__icon"><svg class="icon"><use href="#icon-calendar"></use></svg></span>
+                    <strong>No hay citas para esta fecha</strong>
+                    <p>Selecciona otro día o programa una nueva cita.</p>
+                </div>
+            }
+            else
+            {
+                <div class="agenda-timeline">
+                    @foreach (var cita in _citas)
+                    {
+                        <article class="agenda-cita agenda-cita--@cita.ClaseEstado">
+                            <div class="agenda-cita__hora">
+                                <strong>@cita.FechaHoraInicio.ToString("HH:mm")</strong>
+                                <span>@cita.FechaHoraFin.ToString("HH:mm")</span>
+                            </div>
+                            <div class="agenda-cita__cuerpo">
+                                <div class="agenda-cita__titulo">
+                                    <h3>@cita.NombrePaciente</h3>
+                                    <span class="agenda-estado agenda-estado--@cita.ClaseEstado">@cita.EstadoMostrado</span>
+                                </div>
+                                <p class="agenda-cita__detalle">
+                                    <svg class="icon"><use href="#icon-tooth"></use></svg>
+                                    @(cita.NombreTratamiento ?? "Sin tratamiento") · @cita.NombreOdontologo
+                                </p>
+                                @if (!string.IsNullOrWhiteSpace(cita.Motivo))
+                                {
+                                    <p class="agenda-cita__motivo">@cita.Motivo</p>
+                                }
+                                <div class="agenda-cita__meta">
+                                    @if (!string.IsNullOrEmpty(cita.TelefonoPaciente))
+                                    {
+                                        <span>@cita.TelefonoPaciente</span>
+                                    }
+                                    @if (!string.IsNullOrEmpty(cita.CorreoPaciente))
+                                    {
+                                        <span>@cita.CorreoPaciente</span>
+                                    }
+                                    @if (cita.FechaHoraLlegada.HasValue)
+                                    {
+                                        <span>Llegada: @cita.FechaHoraLlegada.Value.ToString("HH:mm")</span>
+                                    }
+                                </div>
+                            </div>
+                            <div class="agenda-cita__acciones">
+                                @if (PuedeMarcarLlegada(cita) && Sesion.TienePermiso(PermisoCodigos.CitasEditar))
+                                {
+                                    <button type="button" class="button button--secondary agenda-cita__accion"
+                                            @onclick="() => MarcarLlegadaAsync(cita)" disabled="@_guardando">
+                                        Marcar llegada
+                                    </button>
+                                }
+                                @if (EsMiCita(cita) && Sesion.TienePermiso(PermisoCodigos.PacientesExpediente))
+                                {
+                                    @if (cita.Estado is "En espera" or "En atencion")
+                                    {
+                                        <button type="button" class="button button--primary agenda-cita__accion"
+                                                @onclick="() => AtenderAsync(cita)" disabled="@_guardando">
+                                            @(cita.Estado == "En atencion" ? "Continuar" : "Atender")
+                                        </button>
+                                    }
+                                    @if (cita.Estado == "En atencion")
+                                    {
+                                        <button type="button" class="button button--secondary agenda-cita__accion"
+                                                @onclick="() => FinalizarAtencionAsync(cita)" disabled="@_guardando">
+                                            Finalizar
+                                        </button>
+                                    }
+                                }
+                            </div>
+                        </article>
+                    }
+                </div>
+            }
+        </section>
+
+        <aside class="agenda-card agenda-sala">
+            <header class="agenda-card__header">
+                <div>
+                    <h2>Sala de espera</h2>
+                    <p>Avisos en tiempo real para el odontólogo.</p>
+                </div>
+                <span class="agenda-live"><span></span> En vivo</span>
+            </header>
+
+            @if (_notificaciones.Count == 0)
+            {
+                <div class="table-state">
+                    <span class="table-state__icon"><svg class="icon"><use href="#icon-user-check"></use></svg></span>
+                    <strong>Sin pacientes en espera</strong>
+                    <p>Cuando recepción registre una llegada aparecerá aquí.</p>
+                </div>
+            }
+            else
+            {
+                <div class="agenda-avisos">
+                    @foreach (var aviso in _notificaciones.Take(8))
+                    {
+                        <div class="agenda-aviso @(aviso.Leida ? "agenda-aviso--leida" : "")">
+                            <span class="agenda-aviso__icon"><svg class="icon"><use href="#icon-clock"></use></svg></span>
+                            <div>
+                                <strong>@aviso.NombrePaciente</strong>
+                                <p>@aviso.Mensaje</p>
+                                <small>@aviso.FechaCreacion.ToString("HH:mm:ss")</small>
+                            </div>
+                            @if (!aviso.Leida)
+                            {
+                                <button type="button" class="icon-button" title="Marcar como leído"
+                                        @onclick="() => MarcarLeidaAsync(aviso)">
+                                    <svg class="icon"><use href="#icon-check"></use></svg>
+                                </button>
+                            }
+                        </div>
+                    }
+                </div>
+            }
+        </aside>
+    </div>
+
+@if (_modalNuevaCita)
+{
+    <div class="modal-backdrop" @onclick="CerrarNuevaCita" role="dialog" aria-modal="true" aria-labelledby="nueva-cita-title">
+        <div class="modal-dialog" @onclick:stopPropagation="true">
+            <header class="modal-header">
+                <div class="modal-header__title">
+                    <div class="icon-tile icon-tile--primary"><svg class="icon"><use href="#icon-calendar"></use></svg></div>
+                    <div>
+                        <h2 id="nueva-cita-title">Programar cita</h2>
+                        <p>Selecciona odontólogo, tratamiento y un horario disponible.</p>
+                    </div>
+                </div>
+                <button type="button" class="icon-button modal-close" aria-label="Cerrar" @onclick="CerrarNuevaCita">
+                    <svg class="icon"><use href="#icon-x"></use></svg>
+                </button>
+            </header>
+
+            <div class="modal-body">
+                <div class="agenda-form-grid">
+                    <label class="field">
+                        <span>Odontólogo</span>
+                        <select @bind="_nuevoOdontologo" @bind:after="CargarDisponibilidadAsync">
+                            @foreach (var odontologo in _odontologos.Where(o => o.Activo))
+                            {
+                                <option value="@odontologo.IdOdontologo">@odontologo.Nombres @odontologo.Apellidos</option>
+                            }
+                        </select>
+                    </label>
+                    <label class="field">
+                        <span>Fecha</span>
+                        <input type="date" @bind="_nuevaFecha" @bind:after="CargarDisponibilidadAsync" />
+                    </label>
+                    <label class="field">
+                        <span>Tratamiento</span>
+                        <select @bind="_nuevoTratamiento" @bind:after="CargarDisponibilidadAsync">
+                            @foreach (var tratamiento in _tratamientos.Where(t => t.Activo))
+                            {
+                                <option value="@tratamiento.IdTratamiento">@tratamiento.Nombre (@tratamiento.DuracionMinutos min)</option>
+                            }
+                        </select>
+                    </label>
+                    <label class="field">
+                        <span>Paciente</span>
+                        <select @bind="_nuevoPaciente">
+                            @foreach (var paciente in _pacientes.Where(p => p.Activo))
+                            {
+                                <option value="@paciente.IdPaciente">@paciente.Nombres @paciente.Apellidos · @paciente.Identificacion</option>
+                            }
+                        </select>
+                    </label>
+                    <label class="field field--span-2">
+                        <span>Motivo (opcional)</span>
+                        <input @bind="_motivo" maxlength="255" placeholder="Ej. Control de rutina" />
+                    </label>
+                    <label class="field field--span-2">
+                        <span>Observaciones (opcional)</span>
+                        <input @bind="_observaciones" maxlength="500" />
+                    </label>
+                </div>
+
+                <div class="agenda-slots">
+                    <div class="agenda-slots__header">
+                        <h3>Horarios disponibles</h3>
+                        @if (_horaSeleccionada.HasValue)
+                        {
+                            <span class="badge badge--success">Seleccionado: @_horaSeleccionada.Value.ToString("HH:mm")</span>
+                        }
+                    </div>
+
+                    @if (_cargandoSlots)
+                    {
+                        <div class="agenda-slots__grid" aria-busy="true" aria-label="Consultando disponibilidad">
+                            @for (var i = 0; i < 12; i++)
+                            {
+                                <span class="agenda-slot agenda-slot--cargando" aria-hidden="true"></span>
+                            }
+                        </div>
+                    }
+                    else if (_slots.Count == 0)
+                    {
+                        <div class="auth-alert auth-alert--info" role="status">
+                            No hay turnos configurados para este odontólogo en la fecha seleccionada.
+                        </div>
+                    }
+                    else
+                    {
+                        <div class="agenda-slots__grid" role="group" aria-label="Bloques de horario">
+                            @foreach (var slot in _slots)
+                            {
+                                var seleccionado = _horaSeleccionada.HasValue &&
+                                                   _horaSeleccionada.Value.ToString("HH:mm") == slot.HoraInicio;
+                                <button type="button"
+                                        class="agenda-slot @(slot.Disponible ? "agenda-slot--libre" : "agenda-slot--ocupado") @(seleccionado ? "agenda-slot--seleccionado" : "")"
+                                        disabled="@(!slot.Disponible)"
+                                        aria-pressed="@(seleccionado ? "true" : "false")"
+                                        title="@slot.Motivo"
+                                        @onclick="() => SeleccionarSlot(slot)">
+                                    <span class="agenda-slot__hora">@slot.HoraInicio – @slot.HoraFin</span>
+                                    @if (!slot.Disponible)
+                                    {
+                                        <small>@slot.Motivo</small>
+                                    }
+                                </button>
+                            }
+                        </div>
+                        <div class="agenda-slots__leyenda" aria-hidden="true">
+                            <span class="agenda-leyenda agenda-leyenda--libre">Disponible</span>
+                            <span class="agenda-leyenda agenda-leyenda--seleccionado">Seleccionado</span>
+                            <span class="agenda-leyenda agenda-leyenda--ocupado">Ocupado</span>
+                        </div>
+                    }
+
+                    @if (!_cargandoSlots && _slots.Count > 0 && !_hayDisponibilidad)
+                    {
+                        <div class="auth-alert auth-alert--error" role="alert">
+                            Todos los horarios de este día están ocupados. Elige una de las próximas fechas con disponibilidad.
+                        </div>
+                    }
+
+                    @if (!_cargandoSlots && !_hayDisponibilidad && _proximasFechas.Count > 0)
+                    {
+                        <div class="agenda-sugerencias">
+                            <span class="agenda-sugerencias__titulo">Próximas fechas disponibles</span>
+                            <div class="agenda-sugerencias__lista">
+                                @foreach (var fecha in _proximasFechas)
+                                {
+                                    <button type="button" class="button button--secondary agenda-sugerencia"
+                                            @onclick="() => SeleccionarFechaSugeridaAsync(fecha)">
+                                        @TextoFecha(fecha)
+                                    </button>
+                                }
+                            </div>
+                        </div>
+                    }
+                </div>
+            </div>
+
+            <footer class="modal-footer">
+                <button type="button" class="button button--ghost" @onclick="CerrarNuevaCita">Cancelar</button>
+                <button type="button" class="button button--primary" @onclick="ConfirmarCitaAsync" disabled="@(_guardando || !_horaSeleccionada.HasValue)">
+                    @if (_guardando)
+                    {
+                        <span class="button__spinner"></span>
+                    }
+                    Validar y confirmar
+                </button>
+            </footer>
+        </div>
+    </div>
+}
+
+@if (_modalValidacion)
+{
+    <div class="modal-backdrop" @onclick="CerrarValidacion" role="dialog" aria-modal="true" aria-labelledby="validacion-title">
+        <div class="modal-dialog modal-dialog--sm" @onclick:stopPropagation="true">
+            <header class="modal-header">
+                <div class="modal-header__title">
+                    <div class="icon-tile icon-tile--danger"><svg class="icon"><use href="#icon-alert"></use></svg></div>
+                    <div>
+                        <h2 id="validacion-title">Validación de Datos</h2>
+                        <p>Completa la información marcada antes de confirmar la cita.</p>
+                    </div>
+                </div>
+                <button type="button" class="icon-button modal-close" aria-label="Cerrar" @onclick="CerrarValidacion">
+                    <svg class="icon"><use href="#icon-x"></use></svg>
+                </button>
+            </header>
+
+            <div class="modal-body">
+                @if (_erroresValidacion.Count > 0)
+                {
+                    <div class="auth-alert auth-alert--error">
+                        <strong>Datos pendientes:</strong>
+                        <ul>
+                            @foreach (var error in _erroresValidacion.Values)
+                            {
+                                <li>@error</li>
+                            }
+                        </ul>
+                    </div>
+                }
+
+                <div class="agenda-form-grid">
+                    <label class="field">
+                        <span>Nombres</span>
+                        <input @bind="_edicion.Nombres" class="@(HayError("nombreCompleto") ? "invalid" : "")" />
+                    </label>
+                    <label class="field">
+                        <span>Apellidos</span>
+                        <input @bind="_edicion.Apellidos" class="@(HayError("nombreCompleto") ? "invalid" : "")" />
+                    </label>
+                    <label class="field field--span-2">
+                        <span>Identificación</span>
+                        <input @bind="_edicion.Identificacion" class="@(HayError("identificacion") ? "invalid" : "")" />
+                    </label>
+                    <label class="field">
+                        <span>Teléfono</span>
+                        <input @bind="_edicion.Telefono" class="@(HayError("telefono") ? "invalid" : "")" />
+                    </label>
+                    <label class="field">
+                        <span>Correo electrónico</span>
+                        <input @bind="_edicion.Correo" class="@(HayError("correo") ? "invalid" : "")" />
+                    </label>
+                </div>
+                <p class="form-note">Tu horario seleccionado se conserva mientras completas estos datos.</p>
+            </div>
+
+            <footer class="modal-footer">
+                <button type="button" class="button button--ghost" @onclick="CerrarValidacion">Volver</button>
+                <button type="button" class="button button--primary" @onclick="GuardarValidacionAsync" disabled="@_guardando">
+                    @if (_guardando)
+                    {
+                        <span class="button__spinner"></span>
+                    }
+                    Guardar y continuar
+                </button>
+            </footer>
+        </div>
+    </div>
+}
+</div>
+
+@code {
+    private DateTime _fecha = DateTime.Today;
+    private int? _filtroOdontologo;
+    private IReadOnlyList<CitaDto> _citas = Array.Empty<CitaDto>();
+    private IReadOnlyList<OdontologoDto> _odontologos = Array.Empty<OdontologoDto>();
+    private IReadOnlyList<TratamientoDto> _tratamientos = Array.Empty<TratamientoDto>();
+    private IReadOnlyList<PacienteDto> _pacientes = Array.Empty<PacienteDto>();
+    private IReadOnlyList<DisponibilidadCitaDto> _slots = Array.Empty<DisponibilidadCitaDto>();
+    private IReadOnlyList<DateTime> _proximasFechas = Array.Empty<DateTime>();
+    private bool _hayDisponibilidad = true;
+    private int _solicitudSlots;
+
+    private enum EscalaCalendario
+    {
+        Dia,
+        Semana
+    }
+
+    private const int HoraInicioCalendario = 7;
+    private const int HoraFinCalendario = 20;
+    private const double PixelesPorHora = 56;
+
+    private static readonly int[] HorasCalendario = Enumerable.Range(HoraInicioCalendario, HoraFinCalendario - HoraInicioCalendario).ToArray();
+
+    private bool _vistaCalendario;
+    private EscalaCalendario _escalaCalendario = EscalaCalendario.Dia;
+    private readonly Dictionary<DateTime, IReadOnlyList<CitaDto>> _citasSemana = new();
+    private int _versionSemana;
+    private IReadOnlyList<NotificacionSalaEsperaDto> _notificaciones = Array.Empty<NotificacionSalaEsperaDto>();
+    private MiOdontologoDto? _miOdontologo;
+
+    private bool _cargando = true;
+    private bool _cargandoSlots;
+    private bool _guardando;
+    private bool _modalNuevaCita;
+    private bool _modalValidacion;
+    private string? _error;
+    private int _ultimoAvisoId;
+
+    private DateTime _nuevaFecha = DateTime.Today;
+    private int _nuevoOdontologo;
+    private int _nuevoTratamiento;
+    private int _nuevoPaciente;
+    private DateTime? _horaSeleccionada;
+    private string _motivo = string.Empty;
+    private string _observaciones = string.Empty;
+    private CrearCitaRequest? _citaPendiente;
+    private Dictionary<string, string> _erroresValidacion = new();
+    private EdicionPaciente _edicion = new();
+    private readonly CancellationTokenSource _cts = new();
+
+    private sealed class EdicionPaciente
+    {
+        public string Nombres { get; set; } = string.Empty;
+        public string Apellidos { get; set; } = string.Empty;
+        public string Identificacion { get; set; } = string.Empty;
+        public string Telefono { get; set; } = string.Empty;
+        public string Correo { get; set; } = string.Empty;
+    }
+
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            var odontologosTask = OdontologosApi.ObtenerTodosAsync(_cts.Token);
+            var tratamientosTask = TratamientosApi.ObtenerTodosAsync(_cts.Token);
+            var pacientesTask = PacientesApi.ObtenerTodosAsync(_cts.Token);
+
+            await Task.WhenAll(odontologosTask, tratamientosTask, pacientesTask);
+
+            _odontologos = await odontologosTask;
+            _tratamientos = await tratamientosTask;
+            _pacientes = await pacientesTask;
+            _miOdontologo = await CitasApi.ObtenerMiOdontologoAsync(_cts.Token);
+
+            var primerOdontologoActivo = _odontologos.FirstOrDefault(o => o.Activo);
+            if (primerOdontologoActivo is not null)
+            {
+                _nuevoOdontologo = primerOdontologoActivo.IdOdontologo;
+            }
+
+            if (_tratamientos.Count > 0)
+            {
+                _nuevoTratamiento = _tratamientos.First().IdTratamiento;
+            }
+
+            if (_pacientes.Count > 0)
+            {
+                _nuevoPaciente = _pacientes.First().IdPaciente;
+            }
+
+            await CargarCitasAsync();
+            await CargarSalaEsperaAsync(mostrarAvisos: false);
+        }
+        catch (ApiException ex)
+        {
+            _error = ex.Message;
+            Toasts.Mostrar("No se pudo cargar la agenda", ex.Message, ToastTipo.Error);
+        }
+        finally
+        {
+            _cargando = false;
+        }
+
+        _ = ObservarSalaEsperaAsync(_cts.Token);
+    }
+
+    private async Task CargarTodoAsync()
+    {
+        _cargando = true;
+        try
+        {
+            await CargarCitasAsync();
+            await CargarSalaEsperaAsync(mostrarAvisos: true);
+        }
+        catch (ApiException ex)
+        {
+            Toasts.Mostrar("No se pudo actualizar", ex.Message, ToastTipo.Error);
+        }
+        finally
+        {
+            _cargando = false;
+        }
+    }
+
+    private async Task CargarCitasAsync()
+    {
+        _citas = await CitasApi.ObtenerCitasAsync(_fecha, _filtroOdontologo, _cts.Token);
+        _error = null;
+
+        if (_vistaCalendario && _escalaCalendario == EscalaCalendario.Semana)
+        {
+            await CargarSemanaAsync();
+        }
+    }
+
+    private async Task CambiarVistaAsync(bool calendario)
+    {
+        _vistaCalendario = calendario;
+
+        if (calendario && _escalaCalendario == EscalaCalendario.Semana)
+        {
+            await CargarSemanaAsync();
+        }
+    }
+
+    private async Task CambiarEscalaAsync(EscalaCalendario escala)
+    {
+        _escalaCalendario = escala;
+
+        if (!_vistaCalendario)
+        {
+            await CargarSemanaAsync();
+        }
+        else if (escala == EscalaCalendario.Semana)
+        {
+            await CargarSemanaAsync();
+        }
+    }
+
+    private async Task CargarSemanaAsync()
+    {
+        var version = ++_versionSemana;
+        var odontologo = OdontologoSemana;
+        var dias = DiasSemana.ToList();
+
+        if (odontologo is null)
+        {
+            _citasSemana.Clear();
+            return;
+        }
+
+        var resultados = await Task.WhenAll(dias.Select(dia =>
+            CitasApi.ObtenerCitasAsync(dia, odontologo.IdOdontologo, _cts.Token)));
+
+        // Si el usuario cambió la fecha mientras tanto, esta respuesta ya no aplica.
+        if (version != _versionSemana)
+        {
+            return;
+        }
+
+        _citasSemana.Clear();
+        for (var i = 0; i < dias.Count; i++)
+        {
+            _citasSemana[dias[i]] = resultados[i];
+        }
+    }
+
+    private IEnumerable<OdontologoDto> OdontologosCalendario =>
+        _odontologos.Where(o => o.Activo && (!_filtroOdontologo.HasValue || o.IdOdontologo == _filtroOdontologo.Value));
+
+    private OdontologoDto? OdontologoSemana =>
+        OdontologosCalendario.FirstOrDefault() ?? _odontologos.FirstOrDefault(o => o.Activo);
+
+    private DateTime LunesSemana => _fecha.Date.AddDays(-(((int)_fecha.DayOfWeek + 6) % 7));
+
+    private IEnumerable<DateTime> DiasSemana => Enumerable.Range(0, 7).Select(i => LunesSemana.AddDays(i));
+
+    private IReadOnlyList<CitaDto> CitasDelDia(DateTime dia) =>
+        _citasSemana.TryGetValue(dia.Date, out var lista) ? lista : Array.Empty<CitaDto>();
+
+    private string TextoRangoCalendario
+    {
+        get
+        {
+            if (_escalaCalendario == EscalaCalendario.Dia)
+            {
+                return TextoFecha(_fecha);
+            }
+
+            var odontologo = OdontologoSemana;
+            var rango = $"{LunesSemana:dd/MM} – {LunesSemana.AddDays(6):dd/MM/yyyy}";
+            return odontologo is null ? rango : $"{rango} · {odontologo.Nombres} {odontologo.Apellidos}";
+        }
+    }
+
+    private static string TextoDia(DateTime dia)
+    {
+        var texto = dia.ToString("ddd d", CultureInfo.GetCultureInfo("es-CR"));
+        return char.ToUpper(texto[0], CultureInfo.InvariantCulture) + texto[1..];
+    }
+
+    private async Task CargarDisponibilidadAsync()
+    {
+        _horaSeleccionada = null;
+        var solicitud = ++_solicitudSlots;
+
+        if (_nuevoOdontologo <= 0 || _nuevoTratamiento <= 0)
+        {
+            _slots = Array.Empty<DisponibilidadCitaDto>();
+            _proximasFechas = Array.Empty<DateTime>();
+            _hayDisponibilidad = true;
+            return;
+        }
+
+        _cargandoSlots = true;
+        try
+        {
+            var respuesta = await CitasApi.ObtenerDisponibilidadAsync(
+                _nuevoOdontologo, _nuevaFecha, _nuevoTratamiento, _cts.Token);
+
+            // Una consulta anterior puede terminar después de la actual: se descarta.
+            if (solicitud != _solicitudSlots)
+            {
+                return;
+            }
+
+            _slots = respuesta.Bloques;
+            _hayDisponibilidad = respuesta.HayDisponibilidad;
+            _proximasFechas = respuesta.ProximasFechasDisponibles;
+        }
+        catch (ApiException ex)
+        {
+            if (solicitud != _solicitudSlots)
+            {
+                return;
+            }
+
+            _slots = Array.Empty<DisponibilidadCitaDto>();
+            _proximasFechas = Array.Empty<DateTime>();
+            _hayDisponibilidad = false;
+            Toasts.Mostrar("No se pudo consultar la disponibilidad", ex.Message, ToastTipo.Error);
+        }
+        finally
+        {
+            if (solicitud == _solicitudSlots)
+            {
+                _cargandoSlots = false;
+
+                // La respuesta llega fuera de un evento de UI: hay que pedir el repintado.
+                StateHasChanged();
+            }
+        }
+    }
+
+    private async Task SeleccionarFechaSugeridaAsync(DateTime fecha)
+    {
+        _nuevaFecha = fecha.Date;
+        await CargarDisponibilidadAsync();
+    }
+
+    private static string TextoFecha(DateTime fecha)
+    {
+        var texto = fecha.ToString("dddd d 'de' MMMM", CultureInfo.GetCultureInfo("es-CR"));
+        return char.ToUpper(texto[0], CultureInfo.InvariantCulture) + texto[1..];
+    }
+
+    private void AbrirNuevaCita()
+    {
+        _nuevaFecha = _fecha;
+        _motivo = string.Empty;
+        _observaciones = string.Empty;
+        _horaSeleccionada = null;
+        _modalNuevaCita = true;
+        _ = CargarDisponibilidadAsync();
+    }
+
+    private void CerrarNuevaCita()
+    {
+        if (_guardando)
+        {
+            return;
+        }
+
+        _modalNuevaCita = false;
+        _modalValidacion = false;
+    }
+
+    private void SeleccionarSlot(DisponibilidadCitaDto slot)
+    {
+        if (!slot.Disponible || !TimeSpan.TryParse(slot.HoraInicio, out var hora))
+        {
+            return;
+        }
+
+        _horaSeleccionada = _nuevaFecha.Date.Add(hora);
+    }
+
+    private async Task ConfirmarCitaAsync()
+    {
+        if (!_horaSeleccionada.HasValue)
+        {
+            Toasts.Mostrar("Selecciona un horario", "Elige un turno disponible antes de continuar.", ToastTipo.Error);
+            return;
+        }
+
+        _citaPendiente = new CrearCitaRequest
+        {
+            IdPaciente = _nuevoPaciente,
+            IdOdontologo = _nuevoOdontologo,
+            IdTratamiento = _nuevoTratamiento,
+            FechaHoraInicio = _horaSeleccionada.Value,
+            Motivo = _motivo,
+            Observaciones = _observaciones
+        };
+
+        _guardando = true;
+        try
+        {
+            var validacion = await CitasApi.ValidarPacienteAsync(_nuevoPaciente, _cts.Token);
+            if (validacion is not null && !validacion.EsValido)
+            {
+                MostrarValidacion(validacion);
+                return;
+            }
+
+            await CrearCitaAsync(_citaPendiente);
+        }
+        catch (ApiException ex) when (ex.Status == 422)
+        {
+            var validacion = await CitasApi.ValidarPacienteAsync(_nuevoPaciente, _cts.Token);
+            if (validacion is not null)
+            {
+                MostrarValidacion(validacion, ex.Problem?.Errors);
+            }
+            else
+            {
+                Toasts.Mostrar("Datos del paciente incompletos", ex.Message, ToastTipo.Error);
+            }
+        }
+        catch (ApiException ex)
+        {
+            Toasts.Mostrar("No se pudo agendar la cita", ex.Message, ToastTipo.Error);
+
+            // Si otra reserva ocupó el bloque mientras el usuario confirmaba, se actualiza la cuadrícula.
+            if (ex.Status == 409)
+            {
+                await CargarDisponibilidadAsync();
+            }
+        }
+        finally
+        {
+            _guardando = false;
+        }
+    }
+
+    private async Task CrearCitaAsync(CrearCitaRequest request)
+    {
+        var cita = await CitasApi.CrearAsync(request, _cts.Token);
+        _modalNuevaCita = false;
+        _modalValidacion = false;
+        _fecha = cita.FechaHoraInicio.Date;
+        await CargarCitasAsync();
+        await CargarDisponibilidadAsync();
+        Toasts.Mostrar("Cita programada",
+            $"{cita.NombrePaciente} · {cita.FechaHoraInicio:HH:mm} con {cita.NombreOdontologo}.");
+    }
+
+    private void MostrarValidacion(ValidacionPacienteCitaDto validacion, Dictionary<string, string[]>? erroresApi = null)
+    {
+        var paciente = _pacientes.FirstOrDefault(p => p.IdPaciente == validacion.IdPaciente);
+        _edicion = new EdicionPaciente
+        {
+            Nombres = paciente?.Nombres ?? validacion.NombreCompleto.Split(' ').FirstOrDefault() ?? string.Empty,
+            Apellidos = paciente?.Apellidos ?? string.Empty,
+            Identificacion = string.IsNullOrWhiteSpace(validacion.Identificacion)
+                ? paciente?.Identificacion ?? string.Empty : validacion.Identificacion,
+            Telefono = string.IsNullOrWhiteSpace(validacion.Telefono)
+                ? paciente?.Telefono ?? string.Empty : validacion.Telefono,
+            Correo = string.IsNullOrWhiteSpace(validacion.Correo)
+                ? paciente?.Correo ?? string.Empty : validacion.Correo
+        };
+
+        _erroresValidacion = new Dictionary<string, string>();
+        foreach (var campo in validacion.CamposFaltantes)
+        {
+            _erroresValidacion[campo] = MensajeCampo(campo);
+        }
+
+        if (erroresApi is not null)
+        {
+            foreach (var error in erroresApi)
+            {
+                _erroresValidacion.TryAdd(error.Key, string.Join(" ", error.Value));
+            }
+        }
+
+        if (!validacion.Activo)
+        {
+            _erroresValidacion["paciente"] = "El paciente seleccionado está inactivo.";
+        }
+
+        _modalValidacion = true;
+    }
+
+    private async Task GuardarValidacionAsync()
+    {
+        if (_citaPendiente is null)
+        {
+            return;
+        }
+
+        _guardando = true;
+        try
+        {
+            var paciente = _pacientes.FirstOrDefault(p => p.IdPaciente == _citaPendiente.IdPaciente);
+            if (paciente is null)
+            {
+                Toasts.Mostrar("Paciente no encontrado", "Selecciona un paciente válido.", ToastTipo.Error);
+                return;
+            }
+
+            await PacientesApi.ActualizarAsync(paciente.IdPaciente, new ActualizacionPacienteDto
+            {
+                Nombres = _edicion.Nombres.Trim(),
+                Apellidos = _edicion.Apellidos.Trim(),
+                Identificacion = _edicion.Identificacion.Trim(),
+                Telefono = string.IsNullOrWhiteSpace(_edicion.Telefono) ? null : _edicion.Telefono.Trim(),
+                Correo = string.IsNullOrWhiteSpace(_edicion.Correo) ? null : _edicion.Correo.Trim(),
+                FechaNacimiento = paciente.FechaNacimiento,
+                Sexo = paciente.Sexo,
+                Direccion = paciente.Direccion,
+                Activo = true
+            }, _cts.Token);
+
+            var actualizados = await PacientesApi.ObtenerTodosAsync(_cts.Token);
+            _pacientes = actualizados;
+
+            var validacion = await CitasApi.ValidarPacienteAsync(_citaPendiente.IdPaciente, _cts.Token);
+            if (validacion is not null && !validacion.EsValido)
+            {
+                MostrarValidacion(validacion);
+                Toasts.Mostrar("Faltan datos", "Revisa los campos marcados.", ToastTipo.Error);
+                return;
+            }
+
+            _modalValidacion = false;
+            await CrearCitaAsync(_citaPendiente);
+        }
+        catch (ApiException ex)
+        {
+            Toasts.Mostrar("No se pudo guardar", ex.Message, ToastTipo.Error);
+        }
+        finally
+        {
+            _guardando = false;
+        }
+    }
+
+    private void CerrarValidacion()
+    {
+        _modalValidacion = false;
+    }
+
+    private bool HayError(string campo) => _erroresValidacion.ContainsKey(campo);
+
+    private static string MensajeCampo(string campo) => campo switch
+    {
+        "nombreCompleto" => "El nombre completo es obligatorio.",
+        "identificacion" => "La identificación es obligatoria.",
+        "telefono" => "El teléfono es obligatorio.",
+        "correo" => "El correo electrónico es obligatorio.",
+        _ => "Revisa este dato."
+    };
+
+    private static bool PuedeMarcarLlegada(CitaDto cita) =>
+        cita.FechaHoraInicio.Date == DateTime.Today &&
+        cita.Estado is "Programada" or "Confirmada";
+
+    private async Task MarcarLlegadaAsync(CitaDto cita)
+    {
+        _guardando = true;
+        try
+        {
+            var actualizada = await CitasApi.MarcarLlegadaAsync(cita.IdCita, _cts.Token);
+            ReemplazarCita(actualizada);
+            await CargarSalaEsperaAsync(mostrarAvisos: false);
+            Toasts.Mostrar("Llegada registrada", $"{actualizada.NombrePaciente} pasó a sala de espera.");
+        }
+        catch (ApiException ex)
+        {
+            Toasts.Mostrar("No se pudo registrar la llegada", ex.Message, ToastTipo.Error);
+        }
+        finally
+        {
+            _guardando = false;
+        }
+    }
+
+    private bool EsMiCita(CitaDto cita) =>
+        _miOdontologo is not null && cita.IdOdontologo == _miOdontologo.IdOdontologo;
+
+    private async Task AtenderAsync(CitaDto cita)
+    {
+        if (cita.Estado == "En atencion")
+        {
+            IrAExpediente(cita);
+            return;
+        }
+
+        _guardando = true;
+        try
+        {
+            var actualizada = await CitasApi.IniciarAtencionAsync(cita.IdCita, _cts.Token);
+            ReemplazarCita(actualizada);
+            Toasts.Mostrar("Atención iniciada", $"{actualizada.NombrePaciente} pasó a atención.");
+            IrAExpediente(actualizada);
+        }
+        catch (ApiException ex)
+        {
+            Toasts.Mostrar("No se pudo iniciar la atención", ex.Message, ToastTipo.Error);
+        }
+        finally
+        {
+            _guardando = false;
+        }
+    }
+
+    private void IrAExpediente(CitaDto cita) =>
+        Nav.NavigateTo($"expedientes?pacienteId={cita.IdPaciente}&citaId={cita.IdCita}");
+
+    private async Task FinalizarAtencionAsync(CitaDto cita)
+    {
+        _guardando = true;
+        try
+        {
+            var actualizada = await CitasApi.FinalizarAtencionAsync(cita.IdCita, _cts.Token);
+            ReemplazarCita(actualizada);
+            await CargarSalaEsperaAsync(mostrarAvisos: false);
+            Toasts.Mostrar("Atención finalizada", $"{actualizada.NombrePaciente} quedó como atendido.");
+        }
+        catch (ApiException ex)
+        {
+            Toasts.Mostrar("No se pudo finalizar la atención", ex.Message, ToastTipo.Error);
+        }
+        finally
+        {
+            _guardando = false;
+        }
+    }
+
+    private void ReemplazarCita(CitaDto actualizada)
+    {
+        var copia = _citas.ToList();
+        var indice = copia.FindIndex(c => c.IdCita == actualizada.IdCita);
+        if (indice < 0)
+        {
+            return;
+        }
+
+        copia[indice] = actualizada;
+        _citas = copia;
+    }
+
+    private async Task CargarSalaEsperaAsync(bool mostrarAvisos)
+    {
+        var avisos = await CitasApi.ListarSalaEsperaAsync(null, _cts.Token);
+        _notificaciones = avisos;
+
+        if (avisos.Count == 0)
+        {
+            return;
+        }
+
+        var mayorId = avisos.Max(a => a.IdNotificacion);
+        if (mostrarAvisos && _ultimoAvisoId > 0)
+        {
+            foreach (var aviso in avisos.Where(a => a.IdNotificacion > _ultimoAvisoId)
+                                       .OrderBy(a => a.IdNotificacion))
+            {
+                Toasts.Mostrar("Nuevo paciente en sala de espera", aviso.Mensaje, ToastTipo.Info, 7000);
+            }
+        }
+
+        _ultimoAvisoId = Math.Max(_ultimoAvisoId, mayorId);
+    }
+
+    private async Task MarcarLeidaAsync(NotificacionSalaEsperaDto aviso)
+    {
+        try
+        {
+            await CitasApi.MarcarNotificacionLeidaAsync(aviso.IdNotificacion, _cts.Token);
+            await CargarSalaEsperaAsync(mostrarAvisos: false);
+            Toasts.Mostrar("Aviso actualizado", $"El aviso de {aviso.NombrePaciente} quedó marcado como leído.");
+        }
+        catch (ApiException ex)
+        {
+            Toasts.Mostrar("No se pudo actualizar el aviso", ex.Message, ToastTipo.Error);
+        }
+    }
+
+    private async Task ObservarSalaEsperaAsync(CancellationToken cancellationToken)
+    {
+        using var timer = new PeriodicTimer(TimeSpan.FromSeconds(12));
+
+        while (!cancellationToken.IsCancellationRequested)
+        {
+            try
+            {
+                await timer.WaitForNextTickAsync(cancellationToken);
+                await InvokeAsync(() => CargarSalaEsperaAsync(mostrarAvisos: true));
+            }
+            catch (OperationCanceledException)
+            {
+                break;
+            }
+            catch (Exception)
+            {
+                // El polling es informativo: un fallo puntual no debe tumbar la página.
+            }
+        }
+    }
+
+    public void Dispose()
+    {
+        _cts.Cancel();
+        _cts.Dispose();
+    }
+}

@@ -9,6 +9,7 @@ public interface IProductoRepository
     Task<string> ObtenerSiguienteCodigoAsync(CancellationToken cancellationToken = default);
     Task<ProductoDto> InsertarAsync(CreacionProductoDto dto, CancellationToken cancellationToken = default);
     Task<bool> ActualizarAsync(int id, ActualizacionProductoDto dto, CancellationToken cancellationToken = default);
+    Task<ProductoDto?> AumentarExistenciaAsync(int id, long cantidad, CancellationToken cancellationToken = default);
     Task<bool> DesactivarAsync(int id, CancellationToken cancellationToken = default);
     Task<bool> ActivarAsync(int id, CancellationToken cancellationToken = default);
 }

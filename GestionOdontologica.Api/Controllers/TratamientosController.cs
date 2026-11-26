@@ -60,6 +60,7 @@ public sealed class TratamientosController : ControllerBase
             request.Nombre.Trim(),
             request.Descripcion?.Trim(),
             request.Precio,
+            request.DuracionMinutos,
             cancellationToken);
 
         return CreatedAtAction(
@@ -88,6 +89,7 @@ public sealed class TratamientosController : ControllerBase
             request.Nombre.Trim(),
             request.Descripcion?.Trim(),
             request.Precio,
+            request.DuracionMinutos,
             cancellationToken);
 
         if (!actualizado)

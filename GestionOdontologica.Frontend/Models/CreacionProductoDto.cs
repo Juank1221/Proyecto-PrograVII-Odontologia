@@ -6,9 +6,8 @@ public sealed class CreacionProductoDto
     public string? Codigo { get; set; }
     public string Nombre { get; set; } = string.Empty;
     public string? Descripcion { get; set; }
-    public string UnidadMedida { get; set; } = string.Empty;
-    public int StockMinimo { get; set; }
-    public decimal PrecioCosto { get; set; }
-    public decimal PrecioVenta { get; set; }
-    public bool RequiereCaducidad { get; set; }
+    public decimal StockMinimo { get; set; }
+    public decimal Cantidad { get; set; }
+    public decimal Precio { get; set; }
+    public DateTime? FechaCaducidad { get; set; }
 }

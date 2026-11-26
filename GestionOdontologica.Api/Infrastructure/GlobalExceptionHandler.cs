@@ -74,12 +74,14 @@ public sealed class GlobalExceptionHandler(ILogger<GlobalExceptionHandler> logge
                 {
                     20004 => StatusCodes.Status404NotFound,
                     20003 => StatusCodes.Status409Conflict,
+                    20005 => StatusCodes.Status403Forbidden,
                     _ => StatusCodes.Status400BadRequest
                 },
                 oraEx.Number switch
                 {
                     20004 => "Recurso no encontrado",
                     20003 => "Conflicto o duplicado",
+                    20005 => "Operación no permitida",
                     _ => "Regla de negocio"
                 },
                 ExtraerMensajeOracle(oraEx)),

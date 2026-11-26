@@ -67,6 +67,9 @@ public sealed class PacienteRepository : IPacienteRepository
         command.Parameters.Add("p_telefono", OracleDbType.Varchar2, string.IsNullOrWhiteSpace(dto.Telefono) ? (object)DBNull.Value : dto.Telefono.Trim(), ParameterDirection.Input);
         command.Parameters.Add("p_correo", OracleDbType.Varchar2, string.IsNullOrWhiteSpace(dto.Correo) ? (object)DBNull.Value : dto.Correo.Trim(), ParameterDirection.Input);
         command.Parameters.Add("p_direccion", OracleDbType.Varchar2, string.IsNullOrWhiteSpace(dto.Direccion) ? (object)DBNull.Value : dto.Direccion.Trim(), ParameterDirection.Input);
+        command.Parameters.Add("p_contacto_emergencia_nombre", OracleDbType.Varchar2, ValorONulo(dto.ContactoEmergenciaNombre), ParameterDirection.Input);
+        command.Parameters.Add("p_contacto_emergencia_telefono", OracleDbType.Varchar2, ValorONulo(dto.ContactoEmergenciaTelefono), ParameterDirection.Input);
+        command.Parameters.Add("p_contacto_emergencia_parentesco", OracleDbType.Varchar2, ValorONulo(dto.ContactoEmergenciaParentesco), ParameterDirection.Input);
         var idParam = command.Parameters.Add("p_id_paciente", OracleDbType.Int32, ParameterDirection.Output);
 
         try
@@ -99,6 +102,9 @@ public sealed class PacienteRepository : IPacienteRepository
         command.Parameters.Add("p_correo", OracleDbType.Varchar2, string.IsNullOrWhiteSpace(dto.Correo) ? (object)DBNull.Value : dto.Correo.Trim(), ParameterDirection.Input);
         command.Parameters.Add("p_direccion", OracleDbType.Varchar2, string.IsNullOrWhiteSpace(dto.Direccion) ? (object)DBNull.Value : dto.Direccion.Trim(), ParameterDirection.Input);
         command.Parameters.Add("p_activo", OracleDbType.Int32, dto.Activo.HasValue ? (object)(dto.Activo.Value ? 1 : 0) : DBNull.Value, ParameterDirection.Input);
+        command.Parameters.Add("p_contacto_emergencia_nombre", OracleDbType.Varchar2, ValorONulo(dto.ContactoEmergenciaNombre), ParameterDirection.Input);
+        command.Parameters.Add("p_contacto_emergencia_telefono", OracleDbType.Varchar2, ValorONulo(dto.ContactoEmergenciaTelefono), ParameterDirection.Input);
+        command.Parameters.Add("p_contacto_emergencia_parentesco", OracleDbType.Varchar2, ValorONulo(dto.ContactoEmergenciaParentesco), ParameterDirection.Input);
         var filasParam = command.Parameters.Add("p_filas", OracleDbType.Int32, ParameterDirection.Output);
 
         try
@@ -153,6 +159,11 @@ public sealed class PacienteRepository : IPacienteRepository
         return command;
     }
 
+    private static object ValorONulo(string? valor)
+    {
+        return string.IsNullOrWhiteSpace(valor) ? DBNull.Value : valor.Trim();
+    }
+
     private static PacienteDto MapearPaciente(OracleDataReader reader)
     {
         return new PacienteDto
@@ -166,6 +177,9 @@ public sealed class PacienteRepository : IPacienteRepository
             Telefono = reader["TELEFONO"] == DBNull.Value ? null : reader["TELEFONO"].ToString(),
             Correo = reader["CORREO"] == DBNull.Value ? null : reader["CORREO"].ToString(),
             Direccion = reader["DIRECCION"] == DBNull.Value ? null : reader["DIRECCION"].ToString(),
+            ContactoEmergenciaNombre = reader["CONTACTO_EMERGENCIA_NOMBRE"] == DBNull.Value ? null : reader["CONTACTO_EMERGENCIA_NOMBRE"].ToString(),
+            ContactoEmergenciaTelefono = reader["CONTACTO_EMERGENCIA_TELEFONO"] == DBNull.Value ? null : reader["CONTACTO_EMERGENCIA_TELEFONO"].ToString(),
+            ContactoEmergenciaParentesco = reader["CONTACTO_EMERGENCIA_PARENTESCO"] == DBNull.Value ? null : reader["CONTACTO_EMERGENCIA_PARENTESCO"].ToString(),
             Activo = Convert.ToInt32(reader["ACTIVO"]) == 1,
             FechaCreacion = Convert.ToDateTime(reader["FECHA_CREACION"]),
             FechaModificacion = Convert.ToDateTime(reader["FECHA_MODIFICACION"])

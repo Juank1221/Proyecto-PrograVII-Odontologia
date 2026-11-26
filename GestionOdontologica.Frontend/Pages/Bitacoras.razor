@@ -1,6 +1,790 @@
 @page "/bitacoras"
 @attribute [Authorize(Policy = PermisoCodigos.BitacorasVer)]
+@using System.Globalization
+@using GestionOdontologica.Frontend.Models
+@using GestionOdontologica.Frontend.Services
+@inject BitacorasApiService Api
+@inject SesionService Sesion
+@inject ToastService Toasts
+@inject IJSRuntime JS
 
-<ModuloPendiente Titulo="Bitácoras"
-                 Descripcion="Historial de actividad y auditoría del sistema."
-                 Icono="#icon-book" />
+<PageTitle>Bitácoras | OdontoCare</PageTitle>
+
+<div class="page bitacoras-page">
+    <section class="page-heading" aria-labelledby="page-title">
+        <div class="page-heading__copy">
+            <h1 id="page-title">Bitácoras</h1>
+            <p>Auditoría de los movimientos realizados por los usuarios y control de accesos con la IP de origen.</p>
+        </div>
+        @if (Sesion.TienePermiso(PermisoCodigos.BitacorasExportar))
+        {
+            <button type="button" class="btn btn--primary" @onclick="ExportarAsync" disabled="@_exportando">
+                <svg class="icon" aria-hidden="true"><use href="#icon-book"></use></svg>
+                <span>@(_exportando ? "Exportando..." : "Exportar")</span>
+            </button>
+        }
+    </section>
+
+    <div class="bitacoras-tabs" role="tablist" aria-label="Secciones de bitácoras">
+        <button type="button" role="tab" id="tab-actividad"
+                class="bitacoras-tab @(_pestana == Pestana.Actividad ? "is-active" : string.Empty)"
+                aria-selected="@(_pestana == Pestana.Actividad ? "true" : "false")"
+                aria-controls="panel-actividad"
+                @onclick="() => CambiarPestanaAsync(Pestana.Actividad)">
+            <svg class="icon" aria-hidden="true"><use href="#icon-book"></use></svg>
+            <span>Actividad de los usuarios</span>
+            <span class="bitacoras-tab__count">@_resumen.TotalEventos</span>
+        </button>
+        <button type="button" role="tab" id="tab-accesos"
+                class="bitacoras-tab @(_pestana == Pestana.Accesos ? "is-active" : string.Empty)"
+                aria-selected="@(_pestana == Pestana.Accesos ? "true" : "false")"
+                aria-controls="panel-accesos"
+                @onclick="() => CambiarPestanaAsync(Pestana.Accesos)">
+            <svg class="icon" aria-hidden="true"><use href="#icon-shield"></use></svg>
+            <span>Accesos y sesiones</span>
+            <span class="bitacoras-tab__count">@_resumenAccesos.TotalAccesos</span>
+        </button>
+    </div>
+
+    @if (_pestana == Pestana.Actividad)
+    {
+        <div id="panel-actividad" role="tabpanel" aria-labelledby="tab-actividad">
+            <section class="bitacoras-stats" aria-label="Resumen de la bitácora">
+                <article class="bitacora-stat">
+                    <span class="bitacora-stat__label">Eventos registrados</span>
+                    <strong>@_resumen.TotalEventos</strong>
+                    <span class="bitacora-stat__hint">@(UltimoEventoTexto)</span>
+                </article>
+                <article class="bitacora-stat bitacora-stat--ok">
+                    <span class="bitacora-stat__label">Eventos de hoy</span>
+                    <strong>@_resumen.EventosHoy</strong>
+                    <span class="bitacora-stat__hint">Actividad del día</span>
+                </article>
+                <article class="bitacora-stat bitacora-stat--error">
+                    <span class="bitacora-stat__label">Errores</span>
+                    <strong>@_resumen.TotalErrores</strong>
+                    <span class="bitacora-stat__hint">Operaciones fallidas</span>
+                </article>
+                <article class="bitacora-stat bitacora-stat--warn">
+                    <span class="bitacora-stat__label">Advertencias</span>
+                    <strong>@_resumen.TotalAdvertencias</strong>
+                    <span class="bitacora-stat__hint">Requieren revisión</span>
+                </article>
+            </section>
+
+            <section class="card bitacoras-card" aria-labelledby="bitacoras-titulo">
+                <header class="table-card__header">
+                    <div class="table-title-group">
+                        <div class="icon-tile icon-tile--soft" aria-hidden="true">
+                            <svg class="icon"><use href="#icon-book"></use></svg>
+                        </div>
+                        <div>
+                            <div class="title-line">
+                                <h2 id="bitacoras-titulo">Registro de actividad</h2>
+                                <span class="count-badge">@_total</span>
+                            </div>
+                            <p>Consulta por módulo, resultado y rango de fechas</p>
+                        </div>
+                    </div>
+                    <button type="button" class="icon-button icon-button--soft @(_cargando ? "is-spinning" : string.Empty)"
+                            aria-label="Actualizar bitácora" title="Actualizar bitácora"
+                            disabled="@_cargando" @onclick="CargarAsync">
+                        <svg class="icon"><use href="#icon-refresh"></use></svg>
+                    </button>
+                </header>
+
+                <div class="bitacoras-filtros">
+                    <label class="bitacoras-campo">
+                        <span>Desde</span>
+                        <input type="date" class="form-control" value="@_desde" @onchange="e => _desde = e.Value?.ToString() ?? string.Empty" />
+                    </label>
+                    <label class="bitacoras-campo">
+                        <span>Hasta</span>
+                        <input type="date" class="form-control" value="@_hasta" @onchange="e => _hasta = e.Value?.ToString() ?? string.Empty" />
+                    </label>
+                    <label class="bitacoras-campo">
+                        <span>Módulo</span>
+                        <select class="form-control" value="@_modulo" @onchange="CambiarModulo">
+                            <option value="">Todos los módulos</option>
+                            @foreach (var modulo in _filtros.Modulos)
+                            {
+                                <option value="@modulo.Clave">@modulo.Etiqueta</option>
+                            }
+                        </select>
+                    </label>
+                    <label class="bitacoras-campo">
+                        <span>Resultado</span>
+                        <select class="form-control" value="@_resultado" @onchange="CambiarResultado">
+                            <option value="">Todos los resultados</option>
+                            @foreach (var resultado in _filtros.Resultados)
+                            {
+                                <option value="@resultado.Clave">@resultado.Etiqueta</option>
+                            }
+                        </select>
+                    </label>
+                    <label class="bitacoras-campo bitacoras-campo--texto">
+                        <span>Buscar</span>
+                        <span class="bitacoras-buscador">
+                            <svg class="icon" aria-hidden="true"><use href="#icon-search"></use></svg>
+                            <input type="search" placeholder="Usuario, detalle o IP" value="@_texto"
+                                   @oninput="e => _texto = e.Value?.ToString() ?? string.Empty"
+                                   @onkeydown="AlPresionarTecla" />
+                        </span>
+                    </label>
+                    <div class="bitacoras-filtros__acciones">
+                        <button type="button" class="btn btn--primary" @onclick="AplicarFiltrosAsync" disabled="@_cargando">Buscar</button>
+                        <button type="button" class="btn btn--ghost" @onclick="LimpiarFiltrosAsync" disabled="@_cargando">Limpiar</button>
+                    </div>
+                </div>
+
+                @if (_error is not null)
+                {
+                    <div class="table-state table-state--error" role="alert">
+                        <div class="table-state__icon" aria-hidden="true">
+                            <svg class="icon"><use href="#icon-alert"></use></svg>
+                        </div>
+                        <strong>No se pudo cargar la bitácora</strong>
+                        <p>@_error</p>
+                        <button type="button" class="button button--secondary" @onclick="CargarAsync">Reintentar</button>
+                    </div>
+                }
+                else
+                {
+                    <div class="table-wrap">
+                        <table class="users-table bitacoras-table">
+                            <thead>
+                                <tr>
+                                    <th scope="col" class="col-fecha">Fecha y hora</th>
+                                    <th scope="col">Módulo</th>
+                                    <th scope="col">Evento</th>
+                                    <th scope="col">Entidad</th>
+                                    <th scope="col">Usuario</th>
+                                    <th scope="col" class="col-resultado">Resultado</th>
+                                    <th scope="col" class="col-detalle">Detalle</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                @if (_cargando)
+                                {
+                                    @for (var i = 0; i < 6; i++)
+                                    {
+                                        <tr class="skeleton-row" aria-hidden="true">
+                                            <td colspan="7"><span class="skeleton skeleton--line"></span></td>
+                                        </tr>
+                                    }
+                                }
+                                else if (_items.Count == 0)
+                                {
+                                    <tr>
+                                        <td colspan="7">
+                                            <div class="table-state">
+                                                <div class="table-state__icon" aria-hidden="true">
+                                                    <svg class="icon"><use href="#icon-book"></use></svg>
+                                                </div>
+                                                <strong>Sin eventos</strong>
+                                                <p>No hay registros que coincidan con los filtros aplicados.</p>
+                                            </div>
+                                        </td>
+                                    </tr>
+                                }
+                                else
+                                {
+                                    @foreach (var fila in _items)
+                                    {
+                                        <tr @key="fila.IdBitacora">
+                                            <td class="col-fecha">
+                                                <span class="bitacora-fecha">@fila.FechaHora.ToString("dd/MM/yyyy", CultureInfo.InvariantCulture)</span>
+                                                <span class="usuarios-table__meta">@fila.FechaHora.ToString("HH:mm:ss", CultureInfo.InvariantCulture)</span>
+                                            </td>
+                                            <td>@fila.Modulo</td>
+                                            <td>@fila.Accion</td>
+                                            <td>@fila.Entidad</td>
+                                            <td>@fila.Usuario</td>
+                                            <td class="col-resultado">
+                                                <span class="badge @ClaseResultado(fila.ResultadoClave)">@fila.Resultado</span>
+                                            </td>
+                                            <td class="col-detalle">
+                                                <div class="bitacora-detalle-celda">
+                                                    <span title="@fila.Detalle">@(string.IsNullOrWhiteSpace(fila.Detalle) ? "-" : fila.Detalle)</span>
+                                                    <button type="button" class="btn-action btn-action--info"
+                                                            aria-label="Ver detalle del evento"
+                                                            @onclick="() => VerDetalle(fila)">
+                                                        <svg class="icon" aria-hidden="true"><use href="#icon-eye"></use></svg>
+                                                        <span>Ver</span>
+                                                    </button>
+                                                </div>
+                                            </td>
+                                        </tr>
+                                    }
+                                }
+                            </tbody>
+                        </table>
+                    </div>
+
+                    <DataPagination TotalRegistros="_total"
+                                    PaginaActual="_pagina"
+                                    TamanoPagina="_tamano"
+                                    Singular="evento"
+                                    Plural="eventos"
+                                    OnPaginaCambiada="IrAPagina"
+                                    OnTamanoCambiado="CambiarTamano" />
+                }
+            </section>
+        </div>
+    }
+    else
+    {
+        <div id="panel-accesos" role="tabpanel" aria-labelledby="tab-accesos">
+            <section class="bitacoras-stats" aria-label="Resumen de accesos y sesiones">
+                <article class="bitacora-stat">
+                    <span class="bitacora-stat__label">Accesos registrados</span>
+                    <strong>@_resumenAccesos.TotalAccesos</strong>
+                    <span class="bitacora-stat__hint">Hoy: @_resumenAccesos.AccesosHoy</span>
+                </article>
+                <article class="bitacora-stat bitacora-stat--ok">
+                    <span class="bitacora-stat__label">Accesos exitosos</span>
+                    <strong>@_resumenAccesos.AccesosExitosos</strong>
+                    <span class="bitacora-stat__hint">Inicios de sesión correctos</span>
+                </article>
+                <article class="bitacora-stat bitacora-stat--error">
+                    <span class="bitacora-stat__label">Intentos fallidos</span>
+                    <strong>@_resumenAccesos.AccesosFallidos</strong>
+                    <span class="bitacora-stat__hint">Credenciales o cuentas rechazadas</span>
+                </article>
+                <article class="bitacora-stat bitacora-stat--ip">
+                    <span class="bitacora-stat__label">Direcciones IP</span>
+                    <strong>@_resumenAccesos.DireccionesDistintas</strong>
+                    <span class="bitacora-stat__hint">@UltimoAccesoTexto</span>
+                </article>
+            </section>
+
+            <section class="card bitacoras-card" aria-labelledby="accesos-titulo">
+                <header class="table-card__header">
+                    <div class="table-title-group">
+                        <div class="icon-tile icon-tile--soft" aria-hidden="true">
+                            <svg class="icon"><use href="#icon-shield"></use></svg>
+                        </div>
+                        <div>
+                            <div class="title-line">
+                                <h2 id="accesos-titulo">Accesos y sesiones</h2>
+                                <span class="count-badge">@_accesoTotal</span>
+                            </div>
+                            <p>Origen, usuario y resultado de cada inicio o cierre de sesión</p>
+                        </div>
+                    </div>
+                    <button type="button" class="icon-button icon-button--soft @(_accesoCargando ? "is-spinning" : string.Empty)"
+                            aria-label="Actualizar accesos" title="Actualizar accesos"
+                            disabled="@_accesoCargando" @onclick="CargarAccesosAsync">
+                        <svg class="icon"><use href="#icon-refresh"></use></svg>
+                    </button>
+                </header>
+
+                <div class="bitacoras-filtros">
+                    <label class="bitacoras-campo">
+                        <span>Desde</span>
+                        <input type="date" class="form-control" value="@_accDesde" @onchange="e => _accDesde = e.Value?.ToString() ?? string.Empty" />
+                    </label>
+                    <label class="bitacoras-campo">
+                        <span>Hasta</span>
+                        <input type="date" class="form-control" value="@_accHasta" @onchange="e => _accHasta = e.Value?.ToString() ?? string.Empty" />
+                    </label>
+                    <label class="bitacoras-campo">
+                        <span>Resultado</span>
+                        <select class="form-control" value="@_accResultado" @onchange="CambiarResultadoAcceso">
+                            <option value="">Todos los resultados</option>
+                            @foreach (var resultado in _filtros.Resultados)
+                            {
+                                <option value="@resultado.Clave">@resultado.Etiqueta</option>
+                            }
+                        </select>
+                    </label>
+                    <label class="bitacoras-campo bitacoras-campo--texto">
+                        <span>Buscar</span>
+                        <span class="bitacoras-buscador">
+                            <svg class="icon" aria-hidden="true"><use href="#icon-search"></use></svg>
+                            <input type="search" placeholder="Dirección IP o usuario" value="@_accTexto"
+                                   @oninput="e => _accTexto = e.Value?.ToString() ?? string.Empty"
+                                   @onkeydown="AlPresionarTeclaAcceso" />
+                        </span>
+                    </label>
+                    <div class="bitacoras-filtros__acciones">
+                        <button type="button" class="btn btn--primary" @onclick="AplicarFiltrosAccesoAsync" disabled="@_accesoCargando">Buscar</button>
+                        <button type="button" class="btn btn--ghost" @onclick="LimpiarFiltrosAccesoAsync" disabled="@_accesoCargando">Limpiar</button>
+                    </div>
+                </div>
+
+                @if (_accesoError is not null)
+                {
+                    <div class="table-state table-state--error" role="alert">
+                        <div class="table-state__icon" aria-hidden="true">
+                            <svg class="icon"><use href="#icon-alert"></use></svg>
+                        </div>
+                        <strong>No se pudo cargar el control de accesos</strong>
+                        <p>@_accesoError</p>
+                        <button type="button" class="button button--secondary" @onclick="CargarAccesosAsync">Reintentar</button>
+                    </div>
+                }
+                else
+                {
+                    <div class="table-wrap">
+                        <table class="users-table bitacoras-table accesos-table">
+                            <thead>
+                                <tr>
+                                    <th scope="col" class="col-fecha">Fecha y hora</th>
+                                    <th scope="col">Usuario</th>
+                                    <th scope="col">Evento</th>
+                                    <th scope="col" class="col-resultado">Resultado</th>
+                                    <th scope="col" class="col-ip">Dirección IP</th>
+                                    <th scope="col" class="col-detalle">Detalle</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                @if (_accesoCargando)
+                                {
+                                    @for (var i = 0; i < 6; i++)
+                                    {
+                                        <tr class="skeleton-row" aria-hidden="true">
+                                            <td colspan="6"><span class="skeleton skeleton--line"></span></td>
+                                        </tr>
+                                    }
+                                }
+                                else if (_accesoItems.Count == 0)
+                                {
+                                    <tr>
+                                        <td colspan="6">
+                                            <div class="table-state">
+                                                <div class="table-state__icon" aria-hidden="true">
+                                                    <svg class="icon"><use href="#icon-shield"></use></svg>
+                                                </div>
+                                                <strong>Sin accesos registrados</strong>
+                                                <p>No hay inicios ni cierres de sesión que coincidan con los filtros aplicados.</p>
+                                            </div>
+                                        </td>
+                                    </tr>
+                                }
+                                else
+                                {
+                                    @foreach (var fila in _accesoItems)
+                                    {
+                                        <tr @key="fila.IdBitacora">
+                                            <td class="col-fecha">
+                                                <span class="bitacora-fecha">@fila.FechaHora.ToString("dd/MM/yyyy", CultureInfo.InvariantCulture)</span>
+                                                <span class="usuarios-table__meta">@fila.FechaHora.ToString("HH:mm:ss", CultureInfo.InvariantCulture)</span>
+                                            </td>
+                                            <td>@fila.Usuario</td>
+                                            <td>@fila.Accion</td>
+                                            <td class="col-resultado">
+                                                <span class="badge @ClaseResultado(fila.ResultadoClave)">@fila.Resultado</span>
+                                            </td>
+                                            <td class="col-ip">
+                                                <span class="acceso-ip">@IpTexto(fila.DireccionIp)</span>
+                                            </td>
+                                            <td class="col-detalle">
+                                                <div class="bitacora-detalle-celda">
+                                                    <span title="@fila.Detalle">@(string.IsNullOrWhiteSpace(fila.Detalle) ? "-" : fila.Detalle)</span>
+                                                    <button type="button" class="btn-action btn-action--info"
+                                                            aria-label="Ver detalle del acceso"
+                                                            @onclick="() => VerDetalle(fila)">
+                                                        <svg class="icon" aria-hidden="true"><use href="#icon-eye"></use></svg>
+                                                        <span>Ver</span>
+                                                    </button>
+                                                </div>
+                                            </td>
+                                        </tr>
+                                    }
+                                }
+                            </tbody>
+                        </table>
+                    </div>
+
+                    <DataPagination TotalRegistros="_accesoTotal"
+                                    PaginaActual="_accesoPagina"
+                                    TamanoPagina="_accesoTamano"
+                                    Singular="acceso"
+                                    Plural="accesos"
+                                    OnPaginaCambiada="IrAPaginaAcceso"
+                                    OnTamanoCambiado="CambiarTamanoAcceso" />
+                }
+            </section>
+        </div>
+    }
+</div>
+
+<Drawer Visible="_verDetalle && _seleccionado is not null"
+        Titulo="Detalle del evento"
+        Subtitulo="Información registrada por la auditoría de usuarios"
+        OnCerrar="CerrarDetalle">
+    @if (_seleccionado is not null)
+    {
+        <div class="bitacora-detalle">
+            <dl>
+                <dt>Fecha y hora</dt>
+                <dd>@_seleccionado.FechaHora.ToString("dd/MM/yyyy HH:mm:ss", CultureInfo.InvariantCulture)</dd>
+                <dt>Módulo</dt>
+                <dd>@_seleccionado.Modulo</dd>
+                <dt>Evento</dt>
+                <dd>@_seleccionado.Accion</dd>
+                <dt>Entidad</dt>
+                <dd>@_seleccionado.Entidad</dd>
+                <dt>Usuario</dt>
+                <dd>@_seleccionado.Usuario</dd>
+                <dt>Dirección IP</dt>
+                <dd>@IpTexto(_seleccionado.DireccionIp)</dd>
+                <dt>Resultado</dt>
+                <dd><span class="badge @ClaseResultado(_seleccionado.ResultadoClave)">@_seleccionado.Resultado</span></dd>
+                <dt>Detalle</dt>
+                <dd>@(string.IsNullOrWhiteSpace(_seleccionado.Detalle) ? "Sin detalle adicional." : _seleccionado.Detalle)</dd>
+            </dl>
+        </div>
+    }
+</Drawer>
+
+@code {
+    private const int TamanoPredeterminado = 25;
+
+    private enum Pestana
+    {
+        Actividad,
+        Accesos
+    }
+
+    private Pestana _pestana = Pestana.Actividad;
+
+    private BitacoraPaginaDto _paginaActual = new();
+    private BitacoraResumenDto _resumen = new();
+    private BitacoraAccesoResumenDto _resumenAccesos = new();
+    private BitacoraFiltrosDto _filtros = new();
+    private List<BitacoraDto> _items = new();
+    private bool _cargando = true;
+    private bool _exportando;
+    private string? _error;
+    private int _total;
+    private int _pagina = 1;
+    private int _tamano = TamanoPredeterminado;
+
+    private string _desde = string.Empty;
+    private string _hasta = string.Empty;
+    private string _modulo = string.Empty;
+    private string _resultado = string.Empty;
+    private string _texto = string.Empty;
+
+    private List<BitacoraDto> _accesoItems = new();
+    private bool _accesoCargando;
+    private string? _accesoError;
+    private int _accesoTotal;
+    private int _accesoPagina = 1;
+    private int _accesoTamano = TamanoPredeterminado;
+
+    private string _accDesde = string.Empty;
+    private string _accHasta = string.Empty;
+    private string _accResultado = string.Empty;
+    private string _accTexto = string.Empty;
+
+    private bool _verDetalle;
+    private BitacoraDto? _seleccionado;
+
+    private string UltimoEventoTexto => _resumen.UltimoEvento.HasValue
+        ? $"Último: {_resumen.UltimoEvento.Value:dd/MM/yyyy HH:mm}"
+        : "Sin actividad registrada";
+
+    private string UltimoAccesoTexto => _resumenAccesos.UltimoAcceso.HasValue
+        ? $"Último: {_resumenAccesos.UltimoAcceso.Value:dd/MM/yyyy HH:mm}"
+        : "Sin accesos registrados";
+
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            _filtros = await Api.ObtenerFiltrosAsync();
+            _resumen = await Api.ObtenerResumenAsync();
+        }
+        catch (Exception ex)
+        {
+            _error = ex.Message;
+        }
+
+        await ActualizarResumenAccesosAsync();
+        await CargarAsync();
+    }
+
+    private async Task CambiarPestanaAsync(Pestana pestana)
+    {
+        if (_pestana == pestana)
+        {
+            return;
+        }
+
+        _pestana = pestana;
+
+        if (pestana == Pestana.Accesos)
+        {
+            await ActualizarResumenAccesosAsync();
+            await CargarAccesosAsync();
+        }
+    }
+
+    private async Task CargarAsync()
+    {
+        try
+        {
+            _cargando = true;
+            _error = null;
+
+            var consulta = new BitacoraConsultaDto
+            {
+                Desde = Fecha(_desde),
+                Hasta = Fecha(_hasta),
+                Modulo = Vacio(_modulo),
+                Resultado = Vacio(_resultado),
+                Texto = Vacio(_texto),
+                Pagina = _pagina,
+                Tamano = _tamano
+            };
+
+            _paginaActual = await Api.ConsultarAsync(consulta);
+            _items = _paginaActual.Items;
+            _total = _paginaActual.Total;
+        }
+        catch (Exception ex)
+        {
+            _error = ex.Message;
+            _items = new List<BitacoraDto>();
+            _total = 0;
+        }
+        finally
+        {
+            _cargando = false;
+        }
+    }
+
+    private async Task CargarAccesosAsync()
+    {
+        try
+        {
+            _accesoCargando = true;
+            _accesoError = null;
+
+            var consulta = new BitacoraConsultaDto
+            {
+                Desde = Fecha(_accDesde),
+                Hasta = Fecha(_accHasta),
+                Modulo = "SESIONES",
+                Resultado = Vacio(_accResultado),
+                Texto = Vacio(_accTexto),
+                Pagina = _accesoPagina,
+                Tamano = _accesoTamano
+            };
+
+            var pagina = await Api.ConsultarAsync(consulta);
+            _accesoItems = pagina.Items;
+            _accesoTotal = pagina.Total;
+        }
+        catch (Exception ex)
+        {
+            _accesoError = ex.Message;
+            _accesoItems = new List<BitacoraDto>();
+            _accesoTotal = 0;
+        }
+        finally
+        {
+            _accesoCargando = false;
+        }
+    }
+
+    private async Task AplicarFiltrosAsync()
+    {
+        _pagina = 1;
+        await CargarAsync();
+        await ActualizarResumenAsync();
+    }
+
+    private async Task LimpiarFiltrosAsync()
+    {
+        _desde = string.Empty;
+        _hasta = string.Empty;
+        _modulo = string.Empty;
+        _resultado = string.Empty;
+        _texto = string.Empty;
+        _pagina = 1;
+        await CargarAsync();
+    }
+
+    private async Task CambiarModulo(ChangeEventArgs e)
+    {
+        _modulo = e.Value?.ToString() ?? string.Empty;
+        _pagina = 1;
+        await CargarAsync();
+    }
+
+    private async Task CambiarResultado(ChangeEventArgs e)
+    {
+        _resultado = e.Value?.ToString() ?? string.Empty;
+        _pagina = 1;
+        await CargarAsync();
+    }
+
+    private async Task CambiarResultadoAcceso(ChangeEventArgs e)
+    {
+        _accResultado = e.Value?.ToString() ?? string.Empty;
+        _accesoPagina = 1;
+        await CargarAccesosAsync();
+    }
+
+    private async Task AplicarFiltrosAccesoAsync()
+    {
+        _accesoPagina = 1;
+        await CargarAccesosAsync();
+        await ActualizarResumenAccesosAsync();
+    }
+
+    private async Task LimpiarFiltrosAccesoAsync()
+    {
+        _accDesde = string.Empty;
+        _accHasta = string.Empty;
+        _accResultado = string.Empty;
+        _accTexto = string.Empty;
+        _accesoPagina = 1;
+        await CargarAccesosAsync();
+        await ActualizarResumenAccesosAsync();
+    }
+
+    private async Task AlPresionarTecla(KeyboardEventArgs e)
+    {
+        if (e.Key == "Enter")
+        {
+            await AplicarFiltrosAsync();
+        }
+    }
+
+    private async Task AlPresionarTeclaAcceso(KeyboardEventArgs e)
+    {
+        if (e.Key == "Enter")
+        {
+            await AplicarFiltrosAccesoAsync();
+        }
+    }
+
+    private async Task IrAPagina(int pagina)
+    {
+        _pagina = Math.Max(pagina, 1);
+        await CargarAsync();
+    }
+
+    private async Task CambiarTamano(int tamano)
+    {
+        _tamano = Math.Clamp(tamano, 10, 100);
+        _pagina = 1;
+        await CargarAsync();
+    }
+
+    private async Task IrAPaginaAcceso(int pagina)
+    {
+        _accesoPagina = Math.Max(pagina, 1);
+        await CargarAccesosAsync();
+    }
+
+    private async Task CambiarTamanoAcceso(int tamano)
+    {
+        _accesoTamano = Math.Clamp(tamano, 10, 100);
+        _accesoPagina = 1;
+        await CargarAccesosAsync();
+    }
+
+    private async Task ActualizarResumenAsync()
+    {
+        try
+        {
+            _resumen = await Api.ObtenerResumenAsync();
+        }
+        catch
+        {
+            // El resumen es informativo; un fallo no bloquea la consulta.
+        }
+    }
+
+    private async Task ActualizarResumenAccesosAsync()
+    {
+        try
+        {
+            _resumenAccesos = await Api.ObtenerResumenAccesosAsync(Fecha(_accDesde), Fecha(_accHasta));
+        }
+        catch
+        {
+            // El resumen es informativo; un fallo no bloquea la consulta.
+        }
+    }
+
+    private async Task ExportarAsync()
+    {
+        try
+        {
+            _exportando = true;
+
+            var consulta = _pestana == Pestana.Accesos
+                ? new BitacoraConsultaDto
+                {
+                    Desde = Fecha(_accDesde),
+                    Hasta = Fecha(_accHasta),
+                    Modulo = "SESIONES",
+                    Resultado = Vacio(_accResultado),
+                    Texto = Vacio(_accTexto)
+                }
+                : new BitacoraConsultaDto
+                {
+                    Desde = Fecha(_desde),
+                    Hasta = Fecha(_hasta),
+                    Modulo = Vacio(_modulo),
+                    Resultado = Vacio(_resultado),
+                    Texto = Vacio(_texto)
+                };
+
+            var exportacion = await Api.ExportarAsync(consulta);
+
+            await JS.InvokeVoidAsync("odontocareDescargarArchivo",
+                exportacion.Nombre, Convert.ToBase64String(exportacion.Contenido), "text/csv");
+
+            Toasts.Mostrar("Exportación lista",
+                _pestana == Pestana.Accesos
+                    ? "Se descargó el control de accesos y sesiones."
+                    : "Se descargó el archivo de bitácoras.",
+                ToastTipo.Exito);
+        }
+        catch (Exception ex)
+        {
+            Toasts.Mostrar("No se pudo exportar", ex.Message, ToastTipo.Error);
+        }
+        finally
+        {
+            _exportando = false;
+        }
+    }
+
+    private void VerDetalle(BitacoraDto fila)
+    {
+        _seleccionado = fila;
+        _verDetalle = true;
+    }
+
+    private void CerrarDetalle()
+    {
+        _verDetalle = false;
+        _seleccionado = null;
+    }
+
+    private static DateTime? Fecha(string valor) =>
+        DateTime.TryParseExact(valor, "yyyy-MM-dd", CultureInfo.InvariantCulture, DateTimeStyles.None, out var fecha)
+            ? fecha
+            : null;
+
+    private static string? Vacio(string valor) => string.IsNullOrWhiteSpace(valor) ? null : valor.Trim();
+
+    private static string IpTexto(string? direccionIp) =>
+        string.IsNullOrWhiteSpace(direccionIp) ? "No registrada" : direccionIp;
+
+    private static string ClaseResultado(string clave) => clave switch
+    {
+        "ERROR" => "badge--danger",
+        "ADVERTENCIA" => "badge--neutral",
+        _ => "badge--success"
+    };
+}

@@ -1,3 +1,4 @@
+using GestionOdontologica.Api.Validation;
 using System.ComponentModel.DataAnnotations;
 
 namespace GestionOdontologica.Api.DTOs;
@@ -8,10 +9,12 @@ public sealed class CreacionOdontologoDto
 
     [Required(ErrorMessage = "Los nombres son obligatorios.")]
     [StringLength(100, ErrorMessage = "Los nombres no pueden exceder los 100 caracteres.")]
+    [NombrePersona]
     public string Nombres { get; set; } = string.Empty;
 
     [Required(ErrorMessage = "Los apellidos son obligatorios.")]
     [StringLength(100, ErrorMessage = "Los apellidos no pueden exceder los 100 caracteres.")]
+    [NombrePersona]
     public string Apellidos { get; set; } = string.Empty;
 
     [Required(ErrorMessage = "El número de colegiado es obligatorio.")]
