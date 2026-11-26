@@ -80,6 +80,7 @@ public sealed class TratamientoRepository : ITratamientoRepository
         string nombre,
         string? descripcion,
         decimal precio,
+        int duracionMinutos,
         CancellationToken cancellationToken = default)
     {
         using var connection = _connectionFactory.CreateConnection();
@@ -115,6 +116,12 @@ public sealed class TratamientoRepository : ITratamientoRepository
             precio,
             ParameterDirection.Input);
 
+        command.Parameters.Add(
+            "p_duracion_minutos",
+            OracleDbType.Int32,
+            duracionMinutos,
+            ParameterDirection.Input);
+
         var parametroId = new OracleParameter(
             "p_id_tratamiento",
             OracleDbType.Int32)
@@ -135,6 +142,7 @@ public sealed class TratamientoRepository : ITratamientoRepository
         string nombre,
         string? descripcion,
         decimal precio,
+        int duracionMinutos,
         CancellationToken cancellationToken = default)
     {
         using var connection = _connectionFactory.CreateConnection();
@@ -174,6 +182,12 @@ public sealed class TratamientoRepository : ITratamientoRepository
             "p_precio",
             OracleDbType.Decimal,
             precio,
+            ParameterDirection.Input);
+
+        command.Parameters.Add(
+            "p_duracion_minutos",
+            OracleDbType.Int32,
+            duracionMinutos,
             ParameterDirection.Input);
 
         var parametroFilas = new OracleParameter(
@@ -265,6 +279,7 @@ public sealed class TratamientoRepository : ITratamientoRepository
                 ? null
                 : reader["DESCRIPCION"].ToString(),
             Precio = Convert.ToDecimal(reader["PRECIO"]),
+            DuracionMinutos = Convert.ToInt32(reader["DURACION_MINUTOS"]),
             Activo = Convert.ToInt32(reader["ACTIVO"]) == 1,
             FechaCreacion = Convert.ToDateTime(reader["FECHA_CREACION"]),
             FechaModificacion = Convert.ToDateTime(reader["FECHA_MODIFICACION"]),

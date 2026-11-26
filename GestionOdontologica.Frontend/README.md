@@ -31,7 +31,7 @@ La aplicación queda en:
 http://localhost:5501/login
 ```
 
-La raíz `/` redirige a `/login` si no hay sesión o a `/usuarios` si la sesión está vigente. Las rutas internas están protegidas por `AuthorizeRouteView` y redirigen a `/login?returnUrl=...` cuando no hay autenticación.
+La raíz `/` redirige a `/login` si no hay sesión o a `/inicio` si la sesión está vigente. Después de iniciar sesión siempre se abre `/inicio`. Las rutas internas están protegidas por `AuthorizeRouteView` y redirigen a `/login` cuando no hay autenticación.
 
 Compilar sin ejecutar:
 
@@ -81,7 +81,7 @@ GestionOdontologica.Frontend/
 │   ├── UsuarioFormModel.cs       # Validaciones del formulario (clave obligatoria solo al crear)
 │   └── UsuarioVista.cs           # Vista de la tabla (rol desde la API)
 ├── Pages/
-│   ├── Login.razor               # Inicio de sesión con returnUrl y Recordarme
+│   ├── Login.razor               # Inicio de sesión (abre /inicio) y Recordarme
 │   ├── RecuperarPassword.razor   # Solicitud de recuperación (token de desarrollo)
 │   ├── RestablecerPassword.razor # Nueva contraseña con token
 │   ├── Usuarios.razor            # Página principal del Sprint 1
@@ -112,6 +112,7 @@ GestionOdontologica.Frontend/
 - **Restablecimiento:** `/restablecer-password` valida el token, la coincidencia y la política de contraseñas contra `POST /api/auth/restablecer-password`. El token queda inutilizable después del primer uso.
 - **Política de contraseñas:** mínimo 8 y máximo 72 caracteres, sin letras iguales consecutivas (`aa`, `bb`) ni números iguales consecutivos (`11`, `22`). Se valida en el cliente y en la API antes de hashear con BCrypt.
 - **Tema claro/oscuro:** el botón del topbar (y de las pantallas de autenticación) alterna el tema. La preferencia se guarda en `localStorage` (`odontocare.tema`), se aplica antes de cargar Blazor desde `index.html` y, si no existe, respeta `prefers-color-scheme` del sistema. En modo oscuro los títulos de tarjetas y formularios, las etiquetas de los campos y los encabezados de tabla usan tonos claros de alto contraste (`#F9FAFB`, `#E5E7EB`, `#F1F5F9`) y los encabezados de tabla van en `font-weight: 600`.
+- **Caché del CSS:** `wwwroot/index.html` enlaza `css/app.css?v=X.Y`. Al modificar `app.css` hay que subir ese número (por ejemplo `?v=4.1`); si no, el navegador reutiliza la hoja de estilos anterior y la interfaz se ve sin estilos nuevos.
 - **Paginación:** todas las tablas de datos (Usuarios, Inventario, Pacientes, Odontólogos, Roles y Permisos) usan el componente reutilizable `DataPagination` y el estado `Paginacion` (`Models/Paginacion.cs`). Permiten elegir 10, 25 o 50 filas por página, navegar entre páginas y reinician a la primera al cambiar búsqueda o filtros. La paginación es en cliente porque los listados se cargan completos desde la API.
 - **Carga inicial:** `GET /api/usuarios` al entrar a `/usuarios`, con skeletons mientras se espera la respuesta.
 - **Alta de usuario:** `EditForm` con validación por `DataAnnotations` (nombre completo, nombre de usuario, correo, contraseña y rol). Si el modelo es válido se envía `POST /api/usuarios`.

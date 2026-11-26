@@ -7,6 +7,7 @@ public sealed class ProductoFormModel
     [Range(1, int.MaxValue, ErrorMessage = "Selecciona una categoría.")]
     public int IdCategoria { get; set; }
 
+    [Required(ErrorMessage = "El código es obligatorio.")]
     [StringLength(50, ErrorMessage = "El código no puede superar los 50 caracteres.")]
     public string Codigo { get; set; } = string.Empty;
 
@@ -17,20 +18,16 @@ public sealed class ProductoFormModel
     [StringLength(255, ErrorMessage = "La descripción no puede superar los 255 caracteres.")]
     public string? Descripcion { get; set; }
 
-    [Required(ErrorMessage = "La unidad de medida es obligatoria.")]
-    [StringLength(30, MinimumLength = 1, ErrorMessage = "La unidad de medida debe tener entre 1 y 30 caracteres.")]
-    public string UnidadMedida { get; set; } = string.Empty;
+    [Range(0, 9999999999.99, ErrorMessage = "El stock mínimo no puede ser negativo.")]
+    public decimal StockMinimo { get; set; }
 
-    [Range(0, int.MaxValue, ErrorMessage = "El stock mínimo no puede ser negativo.")]
-    public int StockMinimo { get; set; }
-
-    [Range(0, 999999999999.99, ErrorMessage = "El precio debe ser mayor o igual a cero.")]
-    public decimal PrecioCosto { get; set; }
+    [Range(0, 9999999999.99, ErrorMessage = "La cantidad no puede ser negativa.")]
+    public decimal Cantidad { get; set; }
 
     [Range(0, 999999999999.99, ErrorMessage = "El precio debe ser mayor o igual a cero.")]
-    public decimal PrecioVenta { get; set; }
+    public decimal Precio { get; set; }
 
-    public bool RequiereCaducidad { get; set; }
+    public DateTime? FechaCaducidad { get; set; }
 
     public bool EsEdicion { get; set; }
 }

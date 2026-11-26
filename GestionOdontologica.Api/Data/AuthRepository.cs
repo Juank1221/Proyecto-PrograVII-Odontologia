@@ -47,14 +47,17 @@ public sealed class AuthRepository : IAuthRepository
 
         if (!credenciales.Activo)
         {
-            return new ResultadoInicioSesion(EstadoInicioSesion.CuentaInactiva);
+            return new ResultadoInicioSesion(
+                EstadoInicioSesion.CuentaInactiva,
+                IdUsuario: credenciales.IdUsuario);
         }
 
         if (credenciales.SegundosBloqueo > 0)
         {
             return new ResultadoInicioSesion(
                 EstadoInicioSesion.CuentaBloqueada,
-                SegundosBloqueo: credenciales.SegundosBloqueo);
+                SegundosBloqueo: credenciales.SegundosBloqueo,
+                IdUsuario: credenciales.IdUsuario);
         }
 
         if (!PasswordHasher.Verify(password, credenciales.PasswordHash))
@@ -68,12 +71,14 @@ public sealed class AuthRepository : IAuthRepository
             {
                 return new ResultadoInicioSesion(
                     EstadoInicioSesion.CuentaBloqueada,
-                    SegundosBloqueo: segundosBloqueo);
+                    SegundosBloqueo: segundosBloqueo,
+                    IdUsuario: credenciales.IdUsuario);
             }
 
             return new ResultadoInicioSesion(
                 EstadoInicioSesion.CredencialesInvalidas,
-                IntentosRestantes: Math.Max(MaxIntentosFallidos - intentos, 0));
+                IntentosRestantes: Math.Max(MaxIntentosFallidos - intentos, 0),
+                IdUsuario: credenciales.IdUsuario);
         }
 
         await RegistrarAccesoAsync(connection, credenciales.IdUsuario, cancellationToken);
@@ -88,7 +93,8 @@ public sealed class AuthRepository : IAuthRepository
                 Correo = credenciales.Correo,
                 Rol = credenciales.Rol,
                 Activo = true
-            });
+            },
+            IdUsuario: credenciales.IdUsuario);
     }
 
     public async Task<ResultadoSolicitudRecuperacion> SolicitarRecuperacionAsync(

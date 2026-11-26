@@ -86,12 +86,21 @@
                                 </div>
 
                                 <div class="form-field">
-                                    <label>Precio *</label>
+                                    <label>Precio (₡) *</label>
                                     <InputNumber class="form-control"
                                                  @bind-Value="Formulario.Precio"
                                                  step="0.01"
                                                  min="0" />
                                     <ValidationMessage For="@(() => Formulario.Precio)" />
+                                </div>
+
+                                <div class="form-field">
+                                    <label>Duración (minutos) *</label>
+                                    <InputNumber class="form-control"
+                                                 @bind-Value="Formulario.DuracionMinutos"
+                                                 min="5"
+                                                 max="480" />
+                                    <ValidationMessage For="@(() => Formulario.DuracionMinutos)" />
                                 </div>
 
                                 <div class="form-field form-field--span-4">
@@ -172,6 +181,7 @@
                             <th>Código</th>
                             <th>Tratamiento</th>
                             <th>Precio</th>
+                            <th>Duración</th>
                             <th>Estado</th>
                             <th>Fecha de creación</th>
                             <th class="usuarios-table__actions">Acciones</th>
@@ -195,7 +205,10 @@
                                     </div>
                                 </td>
                                 <td>
-                                    @tratamiento.Precio.ToString("C2", Cultura)
+                                    @("₡" + tratamiento.Precio.ToString("N2", Cultura))
+                                </td>
+                                <td>
+                                    @tratamiento.DuracionMinutos min
                                 </td>
                                 <td>
                                     <span class="badge @(tratamiento.Activo
@@ -451,7 +464,8 @@
             CodigoTratamiento = tratamiento.CodigoTratamiento,
             Nombre = tratamiento.Nombre,
             Descripcion = tratamiento.Descripcion,
-            Precio = tratamiento.Precio
+            Precio = tratamiento.Precio,
+            DuracionMinutos = tratamiento.DuracionMinutos
         };
 
         MostrarFormulario = true;
@@ -470,7 +484,8 @@
                     CodigoTratamiento = Formulario.CodigoTratamiento.Trim(),
                     Nombre = Formulario.Nombre.Trim(),
                     Descripcion = Formulario.Descripcion?.Trim(),
-                    Precio = Formulario.Precio
+                    Precio = Formulario.Precio,
+                    DuracionMinutos = Formulario.DuracionMinutos
                 };
 
                 using var response = await TratamientosApi.ActualizarAsync(
@@ -494,7 +509,8 @@
                     CodigoTratamiento = Formulario.CodigoTratamiento.Trim(),
                     Nombre = Formulario.Nombre.Trim(),
                     Descripcion = Formulario.Descripcion?.Trim(),
-                    Precio = Formulario.Precio
+                    Precio = Formulario.Precio,
+                    DuracionMinutos = Formulario.DuracionMinutos
                 };
 
                 using var response = await TratamientosApi.RegistrarAsync(request);
@@ -676,7 +692,11 @@
         public string? Descripcion { get; set; }
 
         [Range(typeof(decimal), "0", "99999999.99",
+            ParseLimitsInInvariantCulture = true,
             ErrorMessage = "El precio debe ser mayor o igual a cero.")]
         public decimal Precio { get; set; }
+
+        [Range(5, 480, ErrorMessage = "La duración debe estar entre 5 y 480 minutos.")]
+        public int DuracionMinutos { get; set; } = 30;
     }
 }

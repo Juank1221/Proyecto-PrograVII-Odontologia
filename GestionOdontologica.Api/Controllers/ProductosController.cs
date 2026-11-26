@@ -55,6 +55,35 @@ public sealed class ProductosController : ControllerBase
         return producto is null ? NotFound() : Ok(producto);
     }
 
+    [HttpPost("{id:int}/existencia")]
+    [Authorize(Policy = PermisoCodigos.InventarioCrear)]
+    [ProducesResponseType(typeof(ProductoDto), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    public async Task<ActionResult<ProductoDto>> AumentarExistencia(
+        int id,
+        [FromBody] AumentoExistenciaDto dto,
+        CancellationToken cancellationToken)
+    {
+        if (id <= 0)
+        {
+            return BadRequest(new { mensaje = "El ID del producto debe ser mayor que cero." });
+        }
+
+        if (dto.IdProducto != id)
+        {
+            return BadRequest(new { mensaje = "El producto indicado no coincide con el producto seleccionado." });
+        }
+
+        if (dto.Cantidad <= 0)
+        {
+            return BadRequest(new { mensaje = "La cantidad que desea agregar debe ser un número entero mayor que cero." });
+        }
+
+        var producto = await _productoRepository.AumentarExistenciaAsync(id, dto.Cantidad, cancellationToken);
+        return producto is null ? NotFound() : Ok(producto);
+    }
+
     [HttpPost]
     [Authorize(Policy = PermisoCodigos.InventarioCrear)]
     [ProducesResponseType(typeof(ProductoDto), StatusCodes.Status201Created)]

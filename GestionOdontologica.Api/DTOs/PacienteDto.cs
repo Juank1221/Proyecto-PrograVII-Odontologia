@@ -11,6 +11,9 @@ public sealed class PacienteDto
     public string? Telefono { get; init; }
     public string? Correo { get; init; }
     public string? Direccion { get; init; }
+    public string? ContactoEmergenciaNombre { get; init; }
+    public string? ContactoEmergenciaTelefono { get; init; }
+    public string? ContactoEmergenciaParentesco { get; init; }
     public bool Activo { get; init; }
     public DateTime FechaCreacion { get; init; }
     public DateTime FechaModificacion { get; init; }

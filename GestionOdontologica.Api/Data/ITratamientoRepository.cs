@@ -17,6 +17,7 @@ public interface ITratamientoRepository
         string nombre,
         string? descripcion,
         decimal precio,
+        int duracionMinutos,
         CancellationToken cancellationToken = default);
 
     Task<bool> ActualizarAsync(
@@ -25,6 +26,7 @@ public interface ITratamientoRepository
         string nombre,
         string? descripcion,
         decimal precio,
+        int duracionMinutos,
         CancellationToken cancellationToken = default);
 
     Task<bool> DesactivarAsync(

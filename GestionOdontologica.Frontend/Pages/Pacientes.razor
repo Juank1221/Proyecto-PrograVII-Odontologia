@@ -16,14 +16,8 @@
         </div>
     </header>
 
-    <div class="usuarios-layout">
-        <section class="usuarios-card usuarios-card--form">
-            <header class="usuarios-card__header">
-                <div>
-                    <h2>@(Editando ? "Editar paciente" : "Nuevo paciente")</h2>
-                    <p>@(Editando ? "Actualiza la información del paciente." : "Registra los datos personales y de contacto del paciente.")</p>
-                </div>
-            </header>
+    <div class="usuarios-layout usuarios-layout--stack">
+        <Drawer Visible="_mostrarFormulario" Titulo="@(Editando ? "Editar paciente" : "Nuevo paciente")" Subtitulo="@(Editando ? "Actualiza los datos del paciente." : "Registra los datos personales y de contacto del paciente.")" OnCerrar="CerrarFormulario">
             <EditForm Model="Formulario" OnValidSubmit="GuardarAsync">
                 <DataAnnotationsValidator />
                 <div class="form-section">
@@ -49,10 +43,11 @@
                         </div>
                         <div class="form-field">
                             <label>Fecha de nacimiento</label>
-                            <InputDate class="form-control" @bind-Value="Formulario.FechaNacimiento" />
+                            <InputDate class="form-control" max="@DateTime.Today.ToString("yyyy-MM-dd")" @bind-Value="Formulario.FechaNacimiento" />
+                            <ValidationMessage For="@(() => Formulario.FechaNacimiento)" />
                         </div>
                         <div class="form-field">
-                            <label>Sexo</label>
+                            <label>Género</label>
                             <InputSelect class="form-control" @bind-Value="Formulario.Sexo">
                                 <option value="">Seleccione...</option>
                                 <option value="Masculino">Masculino</option>
@@ -75,13 +70,38 @@
                     </div>
                     <div class="form-grid">
                         <div class="form-field">
-                            <label>Teléfono</label>
+                            <label>Teléfono *</label>
                             <InputText class="form-control" @bind-Value="Formulario.Telefono" />
+                            <ValidationMessage For="@(() => Formulario.Telefono)" />
                         </div>
                         <div class="form-field form-field--span-2">
-                            <label>Correo electrónico</label>
+                            <label>Correo electrónico *</label>
                             <InputText class="form-control" @bind-Value="Formulario.Correo" />
                             <ValidationMessage For="@(() => Formulario.Correo)" />
+                        </div>
+                    </div>
+                </div>
+
+                <div class="form-section">
+                    <div class="form-section__header">
+                        <h3>Contacto de emergencia</h3>
+                        <p>Persona a contactar en caso de urgencia</p>
+                    </div>
+                    <div class="form-grid">
+                        <div class="form-field form-field--span-2">
+                            <label>Nombre completo</label>
+                            <InputText class="form-control" @bind-Value="Formulario.ContactoEmergenciaNombre" />
+                            <ValidationMessage For="@(() => Formulario.ContactoEmergenciaNombre)" />
+                        </div>
+                        <div class="form-field">
+                            <label>Teléfono</label>
+                            <InputText class="form-control" @bind-Value="Formulario.ContactoEmergenciaTelefono" />
+                            <ValidationMessage For="@(() => Formulario.ContactoEmergenciaTelefono)" />
+                        </div>
+                        <div class="form-field">
+                            <label>Parentesco</label>
+                            <InputText class="form-control" @bind-Value="Formulario.ContactoEmergenciaParentesco" placeholder="Ej. Madre" />
+                            <ValidationMessage For="@(() => Formulario.ContactoEmergenciaParentesco)" />
                         </div>
                     </div>
                 </div>
@@ -104,7 +124,7 @@
                     <button class="btn btn--ghost" type="button" @onclick="CancelarEdicion" disabled="@Guardando">Cancelar</button>
                 </div>
             </EditForm>
-        </section>
+        </Drawer>
 
         <section class="usuarios-card usuarios-card--list">
             <header class="usuarios-card__header">
@@ -113,7 +133,12 @@
                     <p>@ListaPacientes.Count paciente(s) registrados</p>
                 </div>
                 <div class="usuarios-card__header-actions">
-                    <input class="form-control usuarios-search" placeholder="Buscar por nombre, apellido, identificación o correo..." @bind="Filtro" @bind:event="oninput" />
+                    <button type="button" class="btn btn--primary" @onclick="AbrirNuevo"><svg class="icon" aria-hidden="true"><use href="#icon-plus"></use></svg><span>Nuevo paciente</span></button>
+                    <BuscadorEspecifico Campos="CamposBusqueda"
+                                        Campo="@_campoBusqueda"
+                                        CampoChanged="CambiarCampoBusqueda"
+                                        Texto="@Filtro"
+                                        TextoChanged="CambiarFiltro" />
                 </div>
             </header>
 
@@ -155,16 +180,46 @@
                                     <td>@(CalcularEdad(paciente.FechaNacimiento))</td>
                                     <td><span class="badge @(paciente.Activo ? "badge--success" : "badge--danger")">@(paciente.Activo ? "Activo" : "Inactivo")</span></td>
                                     <td class="usuarios-table__actions">
-                                        <button class="btn btn--ghost btn--sm" @onclick="() => Editar(paciente)">Editar</button>
-                                        <button class="btn btn--ghost btn--sm" @onclick="() => AbrirAntecedentes(paciente)">Antecedentes</button>
-                                        @if (paciente.Activo)
-                                        {
-                                            <button class="btn btn--ghost btn--sm" @onclick="() => Desactivar(paciente)">Desactivar</button>
-                                        }
-                                        else
-                                        {
-                                            <button class="btn btn--ghost btn--sm" @onclick="() => Activar(paciente)">Activar</button>
-                                        }
+                                        <div class="action-buttons-group">
+                                            <button type="button"
+                                                    class="btn-action btn-action--edit"
+                                                    title="Editar datos de @paciente.Nombres @paciente.Apellidos"
+                                                    aria-label="Editar datos de @paciente.Nombres @paciente.Apellidos"
+                                                    @onclick="() => Editar(paciente)">
+                                                <svg class="icon" aria-hidden="true"><use href="#icon-edit"></use></svg>
+                                                <span>Editar</span>
+                                            </button>
+                                            <button type="button"
+                                                    class="btn-action btn-action--info"
+                                                    title="Antecedentes de @paciente.Nombres @paciente.Apellidos"
+                                                    aria-label="Antecedentes de @paciente.Nombres @paciente.Apellidos"
+                                                    @onclick="() => AbrirAntecedentes(paciente)">
+                                                <svg class="icon" aria-hidden="true"><use href="#icon-clipboard-list"></use></svg>
+                                                <span>Antecedentes</span>
+                                            </button>
+                                            @if (paciente.Activo)
+                                            {
+                                                <button type="button"
+                                                        class="btn-action btn-action--danger"
+                                                        title="Dar de baja a @paciente.Nombres @paciente.Apellidos"
+                                                        aria-label="Dar de baja a @paciente.Nombres @paciente.Apellidos"
+                                                        @onclick="() => Desactivar(paciente)">
+                                                    <svg class="icon" aria-hidden="true"><use href="#icon-trash"></use></svg>
+                                                    <span>Desactivar</span>
+                                                </button>
+                                            }
+                                            else
+                                            {
+                                                <button type="button"
+                                                        class="btn-action btn-action--success"
+                                                        title="Reactivar a @paciente.Nombres @paciente.Apellidos"
+                                                        aria-label="Reactivar a @paciente.Nombres @paciente.Apellidos"
+                                                        @onclick="() => Activar(paciente)">
+                                                    <svg class="icon" aria-hidden="true"><use href="#icon-user-check"></use></svg>
+                                                    <span>Activar</span>
+                                                </button>
+                                            }
+                                        </div>
                                     </td>
                                 </tr>
                             }
@@ -320,6 +375,7 @@
     private bool Cargando = true;
     private bool Guardando = false;
     private bool Editando = false;
+    private bool _mostrarFormulario;
     private int? IdPacienteEditando;
 
     private PacienteForm Formulario = new();
@@ -342,9 +398,38 @@
     private CreacionAntecedenteDto NuevoAntecedente = new();
     private bool GuardandoAntecedente = false;
 
+    private static readonly IReadOnlyList<CampoBusqueda> CamposBusqueda =
+    [
+        new("nombre", "Nombre", "Ej. María Pérez"),
+        new("identificacion", "Identificación", "Ej. 1-0234-0567"),
+        new("telefono", "Teléfono", "Ej. 8888-9999"),
+        new("correo", "Correo", "Ej. paciente@correo.com")
+    ];
+
+    private string _campoBusqueda = "nombre";
+
+    private void CambiarCampoBusqueda(string campo)
+    {
+        _campoBusqueda = campo;
+        _paginacion.Reiniciar();
+    }
+
+    private void CambiarFiltro(string texto) => Filtro = texto;
+
     private IEnumerable<PacienteDto> PacientesFiltrados => string.IsNullOrWhiteSpace(Filtro)
         ? ListaPacientes
-        : ListaPacientes.Where(p => ($"{p.Nombres} {p.Apellidos} {p.Identificacion} {p.Correo}").Contains(Filtro, StringComparison.OrdinalIgnoreCase));
+        : ListaPacientes.Where(p => CoincideBusqueda(p, Filtro.Trim()));
+
+    private bool CoincideBusqueda(PacienteDto paciente, string termino) => _campoBusqueda switch
+    {
+        "identificacion" => Contiene(paciente.Identificacion, termino),
+        "telefono" => Contiene(paciente.Telefono, termino),
+        "correo" => Contiene(paciente.Correo, termino),
+        _ => Contiene($"{paciente.Nombres} {paciente.Apellidos}", termino)
+    };
+
+    private static bool Contiene(string? valor, string termino) =>
+        !string.IsNullOrEmpty(valor) && valor.Contains(termino, StringComparison.OrdinalIgnoreCase);
 
     private List<PacienteDto> PacientesPagina => _paginacion.Aplicar(PacientesFiltrados).ToList();
 
@@ -392,7 +477,10 @@
                     Sexo = Formulario.Sexo,
                     Telefono = Formulario.Telefono,
                     Correo = Formulario.Correo,
-                    Direccion = Formulario.Direccion
+                    Direccion = Formulario.Direccion,
+                    ContactoEmergenciaNombre = Formulario.ContactoEmergenciaNombre,
+                    ContactoEmergenciaTelefono = Formulario.ContactoEmergenciaTelefono,
+                    ContactoEmergenciaParentesco = Formulario.ContactoEmergenciaParentesco
                 };
                 await PacientesApi.ActualizarAsync(IdPacienteEditando.Value, dto);
                 ToastService.Mostrar("Éxito", "Paciente actualizado correctamente.", ToastTipo.Exito);
@@ -408,7 +496,10 @@
                     Sexo = Formulario.Sexo,
                     Telefono = Formulario.Telefono,
                     Correo = Formulario.Correo,
-                    Direccion = Formulario.Direccion
+                    Direccion = Formulario.Direccion,
+                    ContactoEmergenciaNombre = Formulario.ContactoEmergenciaNombre,
+                    ContactoEmergenciaTelefono = Formulario.ContactoEmergenciaTelefono,
+                    ContactoEmergenciaParentesco = Formulario.ContactoEmergenciaParentesco
                 };
                 await PacientesApi.CrearAsync(dto);
                 ToastService.Mostrar("Éxito", "Paciente registrado correctamente.", ToastTipo.Exito);
@@ -427,9 +518,18 @@
         }
     }
 
+    private void AbrirNuevo()
+    {
+        CancelarEdicion();
+        _mostrarFormulario = true;
+    }
+
+    private void CerrarFormulario() => CancelarEdicion();
+
     private void Editar(PacienteDto paciente)
     {
         Editando = true;
+        _mostrarFormulario = true;
         IdPacienteEditando = paciente.IdPaciente;
         Formulario = new PacienteForm
         {
@@ -440,12 +540,16 @@
             Sexo = paciente.Sexo,
             Telefono = paciente.Telefono,
             Correo = paciente.Correo,
-            Direccion = paciente.Direccion
+            Direccion = paciente.Direccion,
+            ContactoEmergenciaNombre = paciente.ContactoEmergenciaNombre,
+            ContactoEmergenciaTelefono = paciente.ContactoEmergenciaTelefono,
+            ContactoEmergenciaParentesco = paciente.ContactoEmergenciaParentesco
         };
     }
 
     private void CancelarEdicion()
     {
+        _mostrarFormulario = false;
         Editando = false;
         IdPacienteEditando = null;
         Formulario = new PacienteForm();
@@ -569,29 +673,45 @@
     {
         [Required(ErrorMessage = "Los nombres son obligatorios.")]
         [StringLength(100, ErrorMessage = "Los nombres no pueden superar los 100 caracteres.")]
+        [NombrePersona]
         public string Nombres { get; set; } = string.Empty;
 
         [Required(ErrorMessage = "Los apellidos son obligatorios.")]
         [StringLength(100, ErrorMessage = "Los apellidos no pueden superar los 100 caracteres.")]
+        [NombrePersona]
         public string Apellidos { get; set; } = string.Empty;
 
         [Required(ErrorMessage = "La identificación es obligatoria.")]
         [StringLength(20, ErrorMessage = "La identificación no puede superar los 20 caracteres.")]
         public string Identificacion { get; set; } = string.Empty;
 
+        [FechaNoFutura(ErrorMessage = "La fecha de nacimiento no puede ser posterior a la fecha actual.")]
         public DateTime? FechaNacimiento { get; set; }
 
-        [StringLength(10, ErrorMessage = "El sexo no puede superar los 10 caracteres.")]
+        [StringLength(10, ErrorMessage = "El género no puede superar los 10 caracteres.")]
         public string? Sexo { get; set; }
 
+        [Required(ErrorMessage = "El teléfono es obligatorio.")]
         [StringLength(20, ErrorMessage = "El teléfono no puede superar los 20 caracteres.")]
         public string? Telefono { get; set; }
 
+        [Required(ErrorMessage = "El correo electrónico es obligatorio.")]
         [EmailAddress(ErrorMessage = "El formato del correo electrónico no es válido.")]
         [StringLength(150, ErrorMessage = "El correo no puede superar los 150 caracteres.")]
         public string? Correo { get; set; }
 
         [StringLength(250, ErrorMessage = "La dirección no puede superar los 250 caracteres.")]
         public string? Direccion { get; set; }
+        [StringLength(150, ErrorMessage = "El nombre del contacto no puede superar los 150 caracteres.")]
+        [NombrePersona]
+        public string? ContactoEmergenciaNombre { get; set; }
+
+        [StringLength(20, ErrorMessage = "El teléfono del contacto no puede superar los 20 caracteres.")]
+        [RegularExpression(@"^[0-9+\-\s()]*$", ErrorMessage = "El teléfono del contacto solo puede contener números, espacios, +, -, ( y ).")]
+        public string? ContactoEmergenciaTelefono { get; set; }
+
+        [StringLength(50, ErrorMessage = "El parentesco no puede superar los 50 caracteres.")]
+        [NombrePersona]
+        public string? ContactoEmergenciaParentesco { get; set; }
     }
 }

@@ -50,12 +50,16 @@ builder.Services.AddScoped<AuthenticationStateProvider>(
 builder.Services.AddScoped<AuthApiService>();
 builder.Services.AddScoped<UsuariosApiService>();
 builder.Services.AddScoped<PacientesApiService>();
+builder.Services.AddScoped<ExpedientesApiService>();
+builder.Services.AddScoped<BitacorasApiService>();
 builder.Services.AddScoped<OdontologosApiService>();
+builder.Services.AddScoped<CitasApiService>();
 builder.Services.AddScoped<TratamientosApiService>();
 builder.Services.AddScoped<RolesApiService>();
 builder.Services.AddScoped<PermisosApiService>();
 builder.Services.AddScoped<ProductosApiService>();
 builder.Services.AddScoped<CategoriasApiService>();
+builder.Services.AddScoped<SaludApiService>();
 
 // HttpClient con el token de sesión adjunto en Authorization: Bearer.
 builder.Services.AddScoped<AuthHeaderHandler>();

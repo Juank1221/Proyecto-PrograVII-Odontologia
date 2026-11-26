@@ -1,5 +1,5 @@
 @page "/roles"
-@attribute [Authorize(Roles = "Administrador")]
+@attribute [Authorize(Policy = PermisoCodigos.RolesVer)]
 @implements IDisposable
 @inject RolesApiService Api
 @inject ToastService Toasts
@@ -14,7 +14,7 @@
 
     .roles-page .roles-table {
         width: 100%;
-        min-width: 1080px;
+        min-width: 960px;
         table-layout: fixed;
     }
 
@@ -118,7 +118,7 @@
 
     @@media (max-width: 900px) {
         .roles-page .roles-table {
-            min-width: 1080px;
+            min-width: 960px;
         }
     }
 </style>
@@ -168,10 +168,6 @@
                             @(EsModoEdicion ? "Editar rol" : "Agregar rol")
                         </h2>
 
-                        @if (EsModoEdicion && _rolAEditar is not null)
-                        {
-                            <span class="edit-badge">ID #@_rolAEditar.IdRol</span>
-                        }
                     </div>
 
                     <p>
@@ -526,7 +522,6 @@
                                             <div class="user-cell__copy">
                                                 <span class="user-name role-name">@rol.NombreRol</span>
                                                 <span class="user-cell__meta">
-                                                    ID #@rol.IdRol
                                                     @if (esEditando)
                                                     {
                                                         <span class="editing-pill">Editando</span>

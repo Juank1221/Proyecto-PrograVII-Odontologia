@@ -1,24 +1,26 @@
 ﻿<CascadingAuthenticationState>
     <Router AppAssembly="@typeof(App).Assembly">
         <Found Context="routeData">
-            <AuthorizeRouteView RouteData="@routeData" DefaultLayout="@typeof(MainLayout)">
-                <NotAuthorized>
-                    <AuthorizeView>
-                        <Authorized Context="autorizadoContext">
-                            <RedirectToAccesoDenegado />
-                        </Authorized>
-                        <NotAuthorized Context="noAutorizadoContext">
-                            <RedirectToLogin />
-                        </NotAuthorized>
-                    </AuthorizeView>
-                </NotAuthorized>
-                <Authorizing>
-                    <div class="auth-boot" role="status" aria-live="polite">
-                        <span class="auth-boot__spinner" aria-hidden="true"></span>
-                        <span>Verificando tu sesión...</span>
-                    </div>
-                </Authorizing>
-            </AuthorizeRouteView>
+            <GuardaRuta RouteData="@routeData">
+                <AuthorizeRouteView RouteData="@routeData" DefaultLayout="@typeof(MainLayout)">
+                    <NotAuthorized>
+                        <AuthorizeView>
+                            <Authorized Context="autorizadoContext">
+                                <RedirectToAccesoDenegado />
+                            </Authorized>
+                            <NotAuthorized Context="noAutorizadoContext">
+                                <RedirectToLogin />
+                            </NotAuthorized>
+                        </AuthorizeView>
+                    </NotAuthorized>
+                    <Authorizing>
+                        <div class="auth-boot" role="status" aria-live="polite">
+                            <span class="auth-boot__spinner" aria-hidden="true"></span>
+                            <span>Verificando tu sesión...</span>
+                        </div>
+                    </Authorizing>
+                </AuthorizeRouteView>
+            </GuardaRuta>
             <FocusOnNavigate RouteData="@routeData" Selector="h1" />
         </Found>
         <NotFound>

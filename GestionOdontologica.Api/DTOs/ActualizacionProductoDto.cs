@@ -16,19 +16,16 @@ public sealed class ActualizacionProductoDto
     [StringLength(255)]
     public string? Descripcion { get; set; }
 
-    [Required, StringLength(30, MinimumLength = 1)]
-    public string UnidadMedida { get; set; } = string.Empty;
+    [Range(0, 9999999999.99)]
+    public decimal StockMinimo { get; set; }
 
-    [Range(0, int.MaxValue)]
-    public int StockMinimo { get; set; }
-
-    [Range(0, 999999999999.99)]
-    public decimal PrecioCosto { get; set; }
+    [Range(0, 9999999999.99)]
+    public decimal Cantidad { get; set; }
 
     [Range(0, 999999999999.99)]
-    public decimal PrecioVenta { get; set; }
+    public decimal Precio { get; set; }
 
-    public bool RequiereCaducidad { get; set; }
+    public DateTime? FechaCaducidad { get; set; }
 
     public bool? Activo { get; set; }
 }

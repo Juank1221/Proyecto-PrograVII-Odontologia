@@ -10,10 +10,6 @@
         <div class="card-header-copy">
             <div class="card-header-title-row">
                 <h2 id="form-title">@(EsModoEdicion ? "Editar usuario" : "Agregar usuario")</h2>
-                @if (EsModoEdicion && UsuarioAEditar is not null)
-                {
-                    <span class="edit-badge">ID #@UsuarioAEditar.IdUsuario</span>
-                }
             </div>
             <p>@(EsModoEdicion ? $"Modificando los accesos de {UsuarioAEditar?.NombreCompleto ?? "usuario"}." : "Registra un nuevo integrante para el equipo.")</p>
         </div>

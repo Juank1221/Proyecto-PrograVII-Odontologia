@@ -1,6 +1,1588 @@
 @page "/expedientes"
-@attribute [Authorize]
+@attribute [Microsoft.AspNetCore.Authorization.Authorize(Policy = PermisoCodigos.PacientesExpediente)]
+@using System.Globalization
+@using GestionOdontologica.Frontend.Models
+@using GestionOdontologica.Frontend.Services
+@inject PacientesApiService PacientesApi
+@inject ExpedientesApiService ExpedientesApi
+@inject TratamientosApiService TratamientosApi
+@inject CitasApiService CitasApi
+@inject ToastService ToastService
 
-<ModuloPendiente Titulo="Expedientes"
-                 Descripcion="Expedientes clínicos de los pacientes de la clínica."
-                 Icono="#icon-folder" />
+<PageTitle>Expedientes | OdontoCare</PageTitle>
+
+<div class="usuarios-page expedientes-page">
+    <header class="usuarios-page__header">
+        <div>
+            <h1>Expedientes</h1>
+            <p>Expedientes clínicos, atenciones, tratamientos, medicamentos y exámenes de los pacientes.</p>
+        </div>
+    </header>
+
+    <div class="expedientes-layout">
+        <section class="usuarios-card usuarios-card--list">
+            <header class="usuarios-card__header usuarios-card__header--stack">
+                <div>
+                    <h2>Pacientes</h2>
+                    <p>@PacientesFiltrados.Count() de @_pacientes.Count</p>
+                </div>
+                <BuscadorEspecifico Campos="CamposPaciente"
+                                    Campo="@_campoPaciente"
+                                    CampoChanged="CambiarCampoPaciente"
+                                    Texto="@_textoPaciente"
+                                    TextoChanged="t => _textoPaciente = t" />
+            </header>
+
+            @if (_cargandoPacientes)
+            {
+                <p class="expedientes-vacio">Cargando pacientes...</p>
+            }
+            else if (!PacientesFiltrados.Any())
+            {
+                <p class="expedientes-vacio">No hay pacientes que coincidan con la búsqueda.</p>
+            }
+            else
+            {
+                <ul class="paciente-lista">
+                    @foreach (var paciente in PacientesFiltrados)
+                    {
+                        var seleccionado = _pacienteSeleccionado?.IdPaciente == paciente.IdPaciente;
+                        <li>
+                            <button type="button"
+                                    class="paciente-item @(seleccionado ? "is-selected" : string.Empty)"
+                                    aria-pressed="@(seleccionado ? "true" : "false")"
+                                    @onclick="() => SeleccionarPacienteAsync(paciente)">
+                                <span class="avatar avatar--sm" aria-hidden="true">@Iniciales(paciente)</span>
+                                <span class="paciente-item__copy">
+                                    <strong>@paciente.Nombres @paciente.Apellidos</strong>
+                                    <small>@paciente.Identificacion</small>
+                                </span>
+                            </button>
+                        </li>
+                    }
+                </ul>
+            }
+        </section>
+
+        <section class="usuarios-card">
+            @if (_pacienteSeleccionado is null)
+            {
+                <div class="table-state">
+                    <div class="table-state__icon" aria-hidden="true">
+                        <svg class="icon"><use href="#icon-folder"></use></svg>
+                    </div>
+                    <strong>Selecciona un paciente</strong>
+                    <p>Busca un paciente en la lista para ver su expediente, sus atenciones y sus exámenes.</p>
+                </div>
+            }
+            else
+            {
+                <header class="usuarios-card__header">
+                    <div>
+                        <h2>@_pacienteSeleccionado.Nombres @_pacienteSeleccionado.Apellidos</h2>
+                        <p>Identificación @_pacienteSeleccionado.Identificacion</p>
+                    </div>
+                </header>
+
+                @if (_citaEnCurso is not null)
+                {
+                    <div class="expediente-cita">
+                        <span class="expediente-cita__estado @(_atencionRegistradaEnCurso ? "is-lista" : string.Empty)">
+                            @(_atencionRegistradaEnCurso ? "Atención registrada" : "Cita en atención")
+                        </span>
+                        <div class="expediente-cita__datos">
+                            <strong>Cita #@_citaEnCurso.IdCita · @_citaEnCurso.NombrePaciente</strong>
+                            <p>@_citaEnCurso.FechaHoraInicio.ToString("dd/MM/yyyy HH:mm") · @(_citaEnCurso.NombreTratamiento ?? "Sin tratamiento")</p>
+                        </div>
+                        <div class="expediente-cita__acciones">
+                            @if (!_atencionRegistradaEnCurso)
+                            {
+                                <button type="button" class="btn btn--primary btn--sm"
+                                        @onclick="PrepararAtencionEnCursoAsync" disabled="@_guardando">
+                                    Registrar atención
+                                </button>
+                            }
+                            <button type="button" class="btn btn--ghost btn--sm"
+                                    @onclick="FinalizarAtencionAsync" disabled="@_guardando">
+                                Finalizar atención
+                            </button>
+                        </div>
+                    </div>
+                }
+
+                <nav class="expediente-tabs" role="tablist" aria-label="Secciones del expediente">
+                    <button type="button" role="tab" class="expediente-tab @(_pestana == "expediente" ? "is-active" : string.Empty)"
+                            aria-selected="@(_pestana == "expediente" ? "true" : "false")"
+                            @onclick='() => _pestana = "expediente"'>
+                        <svg class="icon" aria-hidden="true"><use href="#icon-clipboard-list"></use></svg>
+                        Expediente y atenciones
+                    </button>
+                    <button type="button" role="tab" class="expediente-tab @(_pestana == "examenes" ? "is-active" : string.Empty)"
+                            aria-selected="@(_pestana == "examenes" ? "true" : "false")"
+                            @onclick='() => _pestana = "examenes"'>
+                        <svg class="icon" aria-hidden="true"><use href="#icon-scan"></use></svg>
+                        Radiografías y exámenes
+                    </button>
+                </nav>
+
+                @if (_pestana == "expediente")
+                {
+                    @if (_cargandoExpediente)
+                    {
+                        <p class="expedientes-vacio">Cargando expediente...</p>
+                    }
+                    else
+                    {
+                        @if (_expediente is null)
+                        {
+                            <div class="expediente-aviso">
+                                <strong>Sin expediente abierto</strong>
+                                <p>El expediente se abre automáticamente al registrar la primera atención del paciente.</p>
+                            </div>
+                        }
+                        else
+                        {
+                            <div class="expediente-resumen">
+                                <div class="expediente-resumen__datos">
+                                    <span class="status-pill @(_expediente.Estado == "Abierto" ? "status-pill--active" : "status-pill--inactive")">
+                                        <span aria-hidden="true"></span>@_expediente.Estado
+                                    </span>
+                                    <span class="usuarios-table__meta">Apertura: @_expediente.FechaApertura.ToString("dd/MM/yyyy")</span>
+                                    <p>@(string.IsNullOrWhiteSpace(_expediente.ObservacionesGenerales) ? "Sin observaciones generales." : _expediente.ObservacionesGenerales)</p>
+                                </div>
+                                <button type="button" class="btn-action btn-action--edit @(_editandoExpediente ? "is-selected" : string.Empty)"
+                                        @onclick="AlternarEdicionExpediente">
+                                    <svg class="icon" aria-hidden="true"><use href="#icon-edit"></use></svg>
+                                    <span>Editar expediente</span>
+                                </button>
+                            </div>
+
+                            @if (_editandoExpediente)
+                            {
+                                <div class="expediente-form">
+                                    <div class="form-grid">
+                                        <div class="form-field">
+                                            <label for="exp-estado">Estado</label>
+                                            <select id="exp-estado" class="form-control" @bind="_formExpediente.Estado">
+                                                <option value="Abierto">Abierto</option>
+                                                <option value="Cerrado">Cerrado</option>
+                                                <option value="Suspendido">Suspendido</option>
+                                            </select>
+                                        </div>
+                                        <div class="form-field form-field--span-2">
+                                            <label for="exp-obs">Observaciones generales</label>
+                                            <textarea id="exp-obs" class="form-control" rows="3" maxlength="255" @bind="_formExpediente.ObservacionesGenerales"></textarea>
+                                        </div>
+                                    </div>
+                                    <div class="expediente-form__acciones">
+                                        <button type="button" class="btn btn--ghost" @onclick="() => _editandoExpediente = false" disabled="@_guardando">Cancelar</button>
+                                        <button type="button" class="btn btn--primary" @onclick="GuardarExpedienteAsync" disabled="@_guardando">Guardar expediente</button>
+                                    </div>
+                                </div>
+                            }
+                        }
+
+                        <div class="expediente-seccion-header">
+                            <h3>Atenciones (@(_expediente?.Atenciones.Count ?? 0))</h3>
+                            <button type="button" class="btn btn--primary btn--sm" @onclick="AlternarNuevaAtencionAsync">
+                                <svg class="icon" aria-hidden="true"><use href="#icon-plus"></use></svg>
+                                Nueva atención
+                            </button>
+                        </div>
+
+                        @if (_mostrarNuevaAtencion)
+                        {
+                            <div class="expediente-form">
+                                <div class="form-grid">
+                                    <div class="form-field form-field--span-2">
+                                        <label for="at-cita">Cita *</label>
+                                        @if (_cargandoCitasParaAtencion)
+                                        {
+                                            <p class="field-hint">Cargando citas del paciente...</p>
+                                        }
+                                        else if (_citasParaAtencion.Count == 0)
+                                        {
+                                            <p class="field-hint">Este paciente no tiene citas en espera o en atención. Recepción debe registrar la llegada.</p>
+                                        }
+                                        else
+                                        {
+                                            <select id="at-cita" class="form-control" @bind="_nuevaAtencion.IdCita">
+                                                <option value="">Selecciona una cita</option>
+                                                @foreach (var cita in _citasParaAtencion)
+                                                {
+                                                    <option value="@cita.IdCita">
+                                                        Cita #@cita.IdCita · @cita.FechaHoraInicio.ToString("dd/MM/yyyy HH:mm") · @cita.Estado
+                                                    </option>
+                                                }
+                                            </select>
+                                            <small class="field-hint">Solo se muestran citas en espera o en atención sin una atención registrada.</small>
+                                        }
+                                    </div>
+                                    <div class="form-field form-field--span-2">
+                                        <label for="at-diag">Diagnóstico *</label>
+                                        <input id="at-diag" class="form-control" maxlength="255" @bind="_nuevaAtencion.Diagnostico" />
+                                    </div>
+                                    <div class="form-field form-field--span-2">
+                                        <label for="at-obs">Observaciones</label>
+                                        <textarea id="at-obs" class="form-control" rows="2" maxlength="255" @bind="_nuevaAtencion.Observaciones"></textarea>
+                                    </div>
+                                    <div class="form-field">
+                                        <label for="at-res">Resultado</label>
+                                        <input id="at-res" class="form-control" maxlength="255" @bind="_nuevaAtencion.Resultado" />
+                                    </div>
+                                    <div class="form-field">
+                                        <label for="at-rec">Recomendaciones</label>
+                                        <input id="at-rec" class="form-control" maxlength="255" @bind="_nuevaAtencion.Recomendaciones" />
+                                    </div>
+                                </div>
+                                <div class="expediente-form__acciones">
+                                    <button type="button" class="btn btn--ghost" @onclick="() => _mostrarNuevaAtencion = false" disabled="@_guardando">Cancelar</button>
+                                    <button type="button" class="btn btn--primary" @onclick="GuardarNuevaAtencionAsync" disabled="@_guardando">Registrar atención</button>
+                                </div>
+                            </div>
+                        }
+
+                        @if (_expediente is not null)
+                        {
+                            @if (!_expediente.Atenciones.Any())
+                            {
+                                <p class="expedientes-vacio">Este expediente todavía no tiene atenciones registradas.</p>
+                            }
+
+                            @foreach (var atencion in _expediente.Atenciones)
+                            {
+                                var expandida = _atencionExpandida == atencion.IdAtencion;
+                                var editando = _atencionEditando == atencion.IdAtencion;
+                                <article class="atencion-card @(expandida ? "is-expanded" : string.Empty)">
+                                    <div class="atencion-card__cabecera">
+                                        <div class="atencion-card__datos">
+                                            <strong>@atencion.Diagnostico</strong>
+                                            <span class="usuarios-table__meta">
+                                                @atencion.FechaAtencion.ToString("dd/MM/yyyy HH:mm") · @atencion.NombreOdontologo · Cita @atencion.IdCita
+                                            </span>
+                                        </div>
+                                        <div class="action-buttons-group">
+                                            <button type="button" class="btn-action btn-action--info @(expandida ? "is-selected" : string.Empty)"
+                                                    aria-expanded="@(expandida ? "true" : "false")"
+                                                    @onclick="() => AlternarDetalleAsync(atencion.IdAtencion)">
+                                                <svg class="icon" aria-hidden="true"><use href="#icon-eye"></use></svg>
+                                                <span>@(expandida ? "Ocultar detalle" : "Ver detalle")</span>
+                                            </button>
+                                            <button type="button" class="btn-action btn-action--edit @(editando ? "is-selected" : string.Empty)"
+                                                    @onclick="() => IniciarEdicionAtencion(atencion)">
+                                                <svg class="icon" aria-hidden="true"><use href="#icon-edit"></use></svg>
+                                                <span>Editar</span>
+                                            </button>
+                                        </div>
+                                    </div>
+
+                                    @if (editando)
+                                    {
+                                        <div class="expediente-form">
+                                            <div class="form-grid">
+                                                <div class="form-field form-field--span-2">
+                                                    <label>Diagnóstico *</label>
+                                                    <input class="form-control" maxlength="255" @bind="_editAtencion.Diagnostico" />
+                                                </div>
+                                                <div class="form-field form-field--span-2">
+                                                    <label>Observaciones</label>
+                                                    <textarea class="form-control" rows="2" maxlength="255" @bind="_editAtencion.Observaciones"></textarea>
+                                                </div>
+                                                <div class="form-field">
+                                                    <label>Resultado</label>
+                                                    <input class="form-control" maxlength="255" @bind="_editAtencion.Resultado" />
+                                                </div>
+                                                <div class="form-field">
+                                                    <label>Recomendaciones</label>
+                                                    <input class="form-control" maxlength="255" @bind="_editAtencion.Recomendaciones" />
+                                                </div>
+                                            </div>
+                                            <div class="expediente-form__acciones">
+                                                <button type="button" class="btn btn--ghost" @onclick="() => _atencionEditando = null" disabled="@_guardando">Cancelar</button>
+                                                <button type="button" class="btn btn--primary" @onclick="() => GuardarEdicionAtencionAsync(atencion.IdAtencion)" disabled="@_guardando">Guardar atención</button>
+                                            </div>
+                                        </div>
+                                    }
+
+                                    @if (expandida)
+                                    {
+                                        @if (!_detalles.TryGetValue(atencion.IdAtencion, out var detalle))
+                                        {
+                                            <p class="expedientes-vacio">Cargando detalle...</p>
+                                        }
+                                        else
+                                        {
+                                            <div class="atencion-detalle">
+                                                <div class="atencion-detalle__titulo">
+                                                    <h4>Tratamientos realizados</h4>
+                                                    @if (_miOdontologo is not null && _miOdontologo.IdOdontologo == atencion.IdOdontologo)
+                                                    {
+                                                        <button type="button" class="btn btn--primary btn--sm"
+                                                                @onclick="() => AlternarFormularioTratamiento(atencion.IdAtencion)"
+                                                                disabled="@_guardando">
+                                                            <svg class="icon" aria-hidden="true"><use href="#icon-plus"></use></svg>
+                                                            Agregar tratamiento
+                                                        </button>
+                                                    }
+                                                </div>
+                                                @if (!detalle.Tratamientos.Any())
+                                                {
+                                                    <p class="expedientes-vacio">Sin tratamientos registrados.</p>
+                                                }
+                                                else
+                                                {
+                                                    <div class="table-wrapper">
+                                                        <table class="usuarios-table">
+                                                            <thead>
+                                                                <tr>
+                                                                    <th>Tratamiento</th>
+                                                                    <th>Descripción</th>
+                                                                    <th>Precio</th>
+                                                                    @if (EsDueno(atencion))
+                                                                    {
+                                                                        <th class="col-actions">Acciones</th>
+                                                                    }
+                                                                </tr>
+                                                            </thead>
+                                                            <tbody>
+                                                                @foreach (var t in detalle.Tratamientos)
+                                                                {
+                                                                    <tr>
+                                                                        <td>@t.NombreTratamiento</td>
+                                                                        <td>@(t.Descripcion ?? "-")</td>
+                                                                        <td>@("₡" + t.PrecioAplicado.ToString("N2", CulturaColones))</td>
+                                                                        @if (EsDueno(atencion))
+                                                                        {
+                                                                            <td class="col-actions">
+                                                                                <div class="action-buttons-group">
+                                                                                    <button type="button" class="btn-action btn-action--edit"
+                                                                                            @onclick="() => EditarTratamiento(atencion.IdAtencion, t)">
+                                                                                        <svg class="icon" aria-hidden="true"><use href="#icon-edit"></use></svg>
+                                                                                        <span>Editar</span>
+                                                                                    </button>
+                                                                                    <button type="button" class="btn-action btn-action--danger"
+                                                                                            @onclick="() => SolicitarEliminarTratamiento(t)">
+                                                                                        <svg class="icon" aria-hidden="true"><use href="#icon-trash"></use></svg>
+                                                                                        <span>Eliminar</span>
+                                                                                    </button>
+                                                                                </div>
+                                                                            </td>
+                                                                        }
+                                                                    </tr>
+                                                                }
+                                                            </tbody>
+                                                        </table>
+                                                    </div>
+                                                }
+
+                                                @if (_atencionAgregandoTratamiento == atencion.IdAtencion)
+                                                {
+                                                    <div class="expediente-form">
+                                                        <div class="form-grid">
+                                                            <div class="form-field form-field--span-2">
+                                                                <label>Tratamiento *</label>
+                                                                <select class="form-control" @bind="_nuevoTratamiento.IdTratamiento" @bind:after="AlCambiarTratamiento">
+                                                                    <option value="0">Selecciona un tratamiento...</option>
+                                                                    @foreach (var catalogo in _catalogoTratamientos.Where(c => c.Activo))
+                                                                    {
+                                                                        <option value="@catalogo.IdTratamiento">@catalogo.Nombre (@("₡" + catalogo.Precio.ToString("N2", CulturaColones)))</option>
+                                                                    }
+                                                                </select>
+                                                                <small class="field-hint">Selecciona un tratamiento del catálogo del sistema.</small>
+                                                            </div>
+                                                            <div class="form-field">
+                                                                <label>Precio aplicado (₡)</label>
+                                                                <input class="form-control" inputmode="decimal" @bind="_nuevoTratamiento.Precio" placeholder="Precio del catálogo" />
+                                                            </div>
+                                                            <div class="form-field">
+                                                                <label>Descripción</label>
+                                                                <input class="form-control" maxlength="255" @bind="_nuevoTratamiento.Descripcion" />
+                                                            </div>
+                                                        </div>
+                                                        <div class="expediente-form__acciones">
+                                                            <button type="button" class="btn btn--ghost" @onclick="CerrarFormularioTratamiento" disabled="@_guardando">Cancelar</button>
+                                                            <button type="button" class="btn btn--primary btn--sm" @onclick="() => GuardarTratamientoAsync(atencion.IdAtencion)" disabled="@_guardando">
+                                                                @(_detalleTratamientoEditando.HasValue ? "Guardar cambios" : "Agregar tratamiento")
+                                                            </button>
+                                                        </div>
+                                                    </div>
+                                                }
+
+                                                <div class="atencion-detalle__titulo">
+                                                    <h4>Medicamentos indicados</h4>
+                                                    @if (_miOdontologo is not null && _miOdontologo.IdOdontologo == atencion.IdOdontologo)
+                                                    {
+                                                        <button type="button" class="btn btn--primary btn--sm"
+                                                                @onclick="() => AlternarFormularioMedicamento(atencion.IdAtencion)"
+                                                                disabled="@_guardando">
+                                                            <svg class="icon" aria-hidden="true"><use href="#icon-plus"></use></svg>
+                                                            Agregar medicamento
+                                                        </button>
+                                                    }
+                                                </div>
+                                                @if (!detalle.Medicamentos.Any())
+                                                {
+                                                    <p class="expedientes-vacio">Sin medicamentos indicados.</p>
+                                                }
+                                                else
+                                                {
+                                                    <div class="table-wrapper">
+                                                        <table class="usuarios-table">
+                                                            <thead>
+                                                                <tr>
+                                                                    <th>Medicamento</th>
+                                                                    <th>Dosis / frecuencia / duración</th>
+                                                                    <th>Indicaciones</th>
+                                                                    <th>Precio</th>
+                                                                    @if (EsDueno(atencion))
+                                                                    {
+                                                                        <th class="col-actions">Acciones</th>
+                                                                    }
+                                                                </tr>
+                                                            </thead>
+                                                            <tbody>
+                                                                @foreach (var m in detalle.Medicamentos)
+                                                                {
+                                                                    <tr>
+                                                                        <td>@m.NombreMedicamento</td>
+                                                                        <td>@(string.Join(" · ", new[] { m.Dosis, m.Frecuencia, m.Duracion }.Where(x => !string.IsNullOrWhiteSpace(x))))</td>
+                                                                        <td>@(m.Indicaciones ?? "-")</td>
+                                                                        <td>@("₡" + m.Precio.ToString("N2", CulturaColones))</td>
+                                                                        @if (EsDueno(atencion))
+                                                                        {
+                                                                            <td class="col-actions">
+                                                                                <div class="action-buttons-group">
+                                                                                    <button type="button" class="btn-action btn-action--edit"
+                                                                                            @onclick="() => EditarMedicamento(atencion.IdAtencion, m)">
+                                                                                        <svg class="icon" aria-hidden="true"><use href="#icon-edit"></use></svg>
+                                                                                        <span>Editar</span>
+                                                                                    </button>
+                                                                                    <button type="button" class="btn-action btn-action--danger"
+                                                                                            @onclick="() => SolicitarEliminarMedicamento(m)">
+                                                                                        <svg class="icon" aria-hidden="true"><use href="#icon-trash"></use></svg>
+                                                                                        <span>Eliminar</span>
+                                                                                    </button>
+                                                                                </div>
+                                                                            </td>
+                                                                        }
+                                                                    </tr>
+                                                                }
+                                                            </tbody>
+                                                        </table>
+                                                    </div>
+                                                }
+
+                                                @if (_atencionAgregandoMedicamento == atencion.IdAtencion)
+                                                {
+                                                    <div class="expediente-form">
+                                                        <div class="form-grid">
+                                                            <div class="form-field form-field--span-2">
+                                                                <label>Medicamento *</label>
+                                                                <select class="form-control" @bind="_medicamentoSeleccionado" @bind:after="AplicarMedicamentoSeleccionado">
+                                                                    <option value="">Selecciona un medicamento...</option>
+                                                                    @foreach (var medicamento in _catalogoMedicamentos)
+                                                                    {
+                                                                        <option value="@medicamento.NombreMedicamento">@medicamento.NombreMedicamento</option>
+                                                                    }
+                                                                    <option value="__otro__">Otro (escribir manualmente)</option>
+                                                                </select>
+                                                                <small class="field-hint">Se sugieren los medicamentos ya registrados en el sistema.</small>
+                                                            </div>
+                                                            @if (_medicamentoEsOtro)
+                                                            {
+                                                                <div class="form-field form-field--span-2">
+                                                                    <label>Nombre del medicamento *</label>
+                                                                    <input class="form-control" maxlength="150" @bind="_nuevoMedicamento.NombreMedicamento" />
+                                                                </div>
+                                                            }
+                                                            <div class="form-field">
+                                                                <label>Dosis</label>
+                                                                <input class="form-control" maxlength="100" @bind="_nuevoMedicamento.Dosis" placeholder="Ej. 500 mg" />
+                                                            </div>
+                                                            <div class="form-field">
+                                                                <label>Frecuencia</label>
+                                                                <input class="form-control" maxlength="100" @bind="_nuevoMedicamento.Frecuencia" placeholder="Ej. cada 8 horas" />
+                                                            </div>
+                                                            <div class="form-field">
+                                                                <label>Duración</label>
+                                                                <input class="form-control" maxlength="100" @bind="_nuevoMedicamento.Duracion" placeholder="Ej. 5 días" />
+                                                            </div>
+                                                            <div class="form-field form-field--span-2">
+                                                                <label>Indicaciones</label>
+                                                                <input class="form-control" maxlength="255" @bind="_nuevoMedicamento.Indicaciones" />
+                                                            </div>
+                                                            <div class="form-field">
+                                                                <label>Precio (₡)</label>
+                                                                <input class="form-control" inputmode="decimal" @bind="_nuevoMedicamento.Precio" placeholder="Precio del inventario" />
+                                                            </div>
+                                                        </div>
+                                                        <div class="expediente-form__acciones">
+                                                            <button type="button" class="btn btn--ghost" @onclick="CerrarFormularioMedicamento" disabled="@_guardando">Cancelar</button>
+                                                            <button type="button" class="btn btn--primary btn--sm" @onclick="() => GuardarMedicamentoAsync(atencion.IdAtencion)" disabled="@_guardando">
+                                                                @(_medicamentoEditando.HasValue ? "Guardar cambios" : "Agregar medicamento")
+                                                            </button>
+                                                        </div>
+                                                    </div>
+                                                }
+                                            </div>
+                                        }
+                                    }
+                                </article>
+                            }
+                        }
+                    }
+                }
+                else
+                {
+                    <div class="expediente-seccion-header">
+                        <h3>Exámenes y radiografías (@_examenes.Count)</h3>
+                        <button type="button" class="btn btn--primary btn--sm" @onclick="() => _mostrarNuevoExamen = !_mostrarNuevoExamen">
+                            <svg class="icon" aria-hidden="true"><use href="#icon-plus"></use></svg>
+                            Solicitar examen
+                        </button>
+                    </div>
+
+                    @if (_mostrarNuevoExamen)
+                    {
+                        <div class="expediente-form">
+                            <div class="form-grid">
+                                <div class="form-field form-field--span-2">
+                                    <label for="ex-tipo">Tipo de examen *</label>
+                                    <input id="ex-tipo" class="form-control" list="tipos-examen" maxlength="100" @bind="_nuevoExamen.TipoExamen" />
+                                    <datalist id="tipos-examen">
+                                        <option value="Radiografía periapical" />
+                                        <option value="Radiografía panorámica" />
+                                        <option value="Radiografía bitewing" />
+                                        <option value="Radiografía oclusal" />
+                                        <option value="Tomografía (CBCT)" />
+                                        <option value="Examen de laboratorio" />
+                                    </datalist>
+                                </div>
+                                <div class="form-field">
+                                    <label for="ex-sol">Fecha de solicitud</label>
+                                    <input id="ex-sol" type="date" class="form-control" value="@_nuevoExamen.FechaSolicitud" @onchange="e => _nuevoExamen.FechaSolicitud = e.Value?.ToString() ?? string.Empty" />
+                                </div>
+                                <div class="form-field">
+                                    <label for="ex-real">Fecha de realización</label>
+                                    <input id="ex-real" type="date" class="form-control" value="@_nuevoExamen.FechaRealizacion" @onchange="e => _nuevoExamen.FechaRealizacion = e.Value?.ToString() ?? string.Empty" />
+                                    <small class="field-hint">Si la indicas, el examen queda como Realizado.</small>
+                                </div>
+                                <div class="form-field">
+                                    <label for="ex-at">Atención asociada (ID)</label>
+                                    <input id="ex-at" class="form-control" inputmode="numeric" @bind="_nuevoExamen.IdAtencion" placeholder="Opcional" />
+                                </div>
+                                <div class="form-field form-field--span-2">
+                                    <label for="ex-obs">Observaciones</label>
+                                    <textarea id="ex-obs" class="form-control" rows="2" maxlength="255" @bind="_nuevoExamen.Observaciones"></textarea>
+                                </div>
+                            </div>
+                            <div class="expediente-form__acciones">
+                                <button type="button" class="btn btn--ghost" @onclick="() => _mostrarNuevoExamen = false" disabled="@_guardando">Cancelar</button>
+                                <button type="button" class="btn btn--primary" @onclick="GuardarExamenAsync" disabled="@_guardando">Registrar examen</button>
+                            </div>
+                        </div>
+                    }
+
+                    @if (_cargandoExamenes)
+                    {
+                        <p class="expedientes-vacio">Cargando exámenes...</p>
+                    }
+                    else if (!_examenes.Any())
+                    {
+                        <p class="expedientes-vacio">Este paciente no tiene exámenes registrados.</p>
+                    }
+                    else
+                    {
+                        <div class="table-wrapper">
+                            <table class="usuarios-table">
+                                <thead>
+                                    <tr>
+                                        <th>Examen</th>
+                                        <th>Solicitud</th>
+                                        <th>Realización</th>
+                                        <th>Estado</th>
+                                        <th>Resultado</th>
+                                        <th class="usuarios-table__actions">Acciones</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    @foreach (var examen in _examenes)
+                                    {
+                                        var editandoExamen = _examenEditando == examen.IdExamen;
+                                        <tr>
+                                            <td>
+                                                <div class="usuarios-table__name">@examen.TipoExamen</div>
+                                                <div class="usuarios-table__meta">@(examen.IdAtencion.HasValue ? $"Atención {examen.IdAtencion}" : "Sin atención")</div>
+                                            </td>
+                                            <td>@examen.FechaSolicitud.ToString("dd/MM/yyyy")</td>
+                                            <td>@(examen.FechaRealizacion?.ToString("dd/MM/yyyy") ?? "-")</td>
+                                            <td><span class="badge @ClaseEstadoExamen(examen.Estado)">@examen.Estado</span></td>
+                                            <td>@(examen.Resultado ?? "-")</td>
+                                            <td class="usuarios-table__actions">
+                                                <button type="button" class="btn-action btn-action--edit @(editandoExamen ? "is-selected" : string.Empty)"
+                                                        @onclick="() => IniciarResultadoExamen(examen)">
+                                                    <svg class="icon" aria-hidden="true"><use href="#icon-edit"></use></svg>
+                                                    <span>Resultado</span>
+                                                </button>
+                                            </td>
+                                        </tr>
+                                        @if (editandoExamen)
+                                        {
+                                            <tr class="expediente-fila-form">
+                                                <td colspan="6">
+                                                    <div class="expediente-form">
+                                                        <div class="form-grid">
+                                                            <div class="form-field">
+                                                                <label>Estado *</label>
+                                                                <select class="form-control" @bind="_formResultado.Estado">
+                                                                    <option value="Solicitado">Solicitado</option>
+                                                                    <option value="En proceso">En proceso</option>
+                                                                    <option value="Realizado">Realizado</option>
+                                                                    <option value="Cancelado">Cancelado</option>
+                                                                </select>
+                                                            </div>
+                                                            <div class="form-field">
+                                                                <label>Fecha de realización</label>
+                                                                <input type="date" class="form-control" value="@_formResultado.FechaRealizacion" @onchange="e => _formResultado.FechaRealizacion = e.Value?.ToString() ?? string.Empty" />
+                                                            </div>
+                                                            <div class="form-field form-field--span-2">
+                                                                <label>Resultado</label>
+                                                                <input class="form-control" maxlength="255" @bind="_formResultado.Resultado" />
+                                                                <small class="field-hint">Obligatorio cuando el examen está Realizado.</small>
+                                                            </div>
+                                                            <div class="form-field form-field--span-2">
+                                                                <label>Observaciones</label>
+                                                                <textarea class="form-control" rows="2" maxlength="255" @bind="_formResultado.Observaciones"></textarea>
+                                                            </div>
+                                                        </div>
+                                                        <div class="expediente-form__acciones">
+                                                            <button type="button" class="btn btn--ghost" @onclick="() => _examenEditando = null" disabled="@_guardando">Cancelar</button>
+                                                            <button type="button" class="btn btn--primary" @onclick="() => GuardarResultadoExamenAsync(examen.IdExamen)" disabled="@_guardando">Guardar resultado</button>
+                                                        </div>
+                                                    </div>
+                                                </td>
+                                            </tr>
+                                        }
+                                    }
+                                </tbody>
+                            </table>
+                        </div>
+                    }
+                }
+            }
+        </section>
+    </div>
+</div>
+
+<ConfirmModal Visible="_mostrarConfirmacionTratamiento"
+              Titulo="¿Eliminar tratamiento?"
+              Mensaje="@("¿Deseas eliminar " + (_tratamientoAEliminar?.NombreTratamiento ?? "este tratamiento") + " de esta atención?")"
+              Detalle="Esta acción no se puede deshacer."
+              BotonConfirmar="Eliminar tratamiento"
+              EsPeligro="true"
+              Icono="#icon-trash"
+              Cargando="_guardando"
+              OnConfirmar="ConfirmarEliminarTratamientoAsync"
+              OnCancelar="CancelarEliminarTratamiento" />
+
+<ConfirmModal Visible="_mostrarConfirmacionMedicamento"
+              Titulo="¿Eliminar medicamento?"
+              Mensaje="@("¿Deseas eliminar " + (_medicamentoAEliminar?.NombreMedicamento ?? "este medicamento") + " de esta atención?")"
+              Detalle="Esta acción no se puede deshacer."
+              BotonConfirmar="Eliminar medicamento"
+              EsPeligro="true"
+              Icono="#icon-trash"
+              Cargando="_guardando"
+              OnConfirmar="ConfirmarEliminarMedicamentoAsync"
+              OnCancelar="CancelarEliminarMedicamento" />
+
+@code {
+    [SupplyParameterFromQuery(Name = "pacienteId")]
+    public int? PacienteIdQuery { get; set; }
+
+    [SupplyParameterFromQuery(Name = "citaId")]
+    public int? CitaIdQuery { get; set; }
+
+    private static readonly IReadOnlyList<CampoBusqueda> CamposPaciente =
+    [
+        new("nombre", "Nombre", "Ej. María Pérez"),
+        new("identificacion", "Identificación", "Ej. 1-0234-0567")
+    ];
+
+    private List<PacienteDto> _pacientes = new();
+    private List<TratamientoDto> _catalogoTratamientos = new();
+    private List<MedicamentoCatalogoDto> _catalogoMedicamentos = new();
+    private bool _cargandoPacientes = true;
+    private string _campoPaciente = "nombre";
+    private string _textoPaciente = string.Empty;
+
+    private PacienteDto? _pacienteSeleccionado;
+    private ExpedienteDto? _expediente;
+    private bool _cargandoExpediente;
+    private string _pestana = "expediente";
+    private bool _guardando;
+
+    private bool _editandoExpediente;
+    private FormExpediente _formExpediente = new();
+    private bool _mostrarNuevaAtencion;
+    private FormNuevaAtencion _nuevaAtencion = new();
+    private List<CitaParaAtencionDto> _citasParaAtencion = new();
+    private bool _cargandoCitasParaAtencion;
+    private CitaDto? _citaEnCurso;
+    private bool _atencionRegistradaEnCurso;
+    private MiOdontologoDto? _miOdontologo;
+    private int? _atencionEditando;
+    private ActualizacionAtencionDto _editAtencion = new();
+    private int? _atencionExpandida;
+    private readonly Dictionary<int, DetalleAtencionDto> _detalles = new();
+    private FormTratamiento _nuevoTratamiento = new();
+    private FormMedicamento _nuevoMedicamento = new();
+    private int? _atencionAgregandoTratamiento;
+    private int? _atencionAgregandoMedicamento;
+    private int? _detalleTratamientoEditando;
+    private int? _medicamentoEditando;
+    private TratamientoAtencionDto? _tratamientoAEliminar;
+    private MedicamentoIndicadoDto? _medicamentoAEliminar;
+    private bool _mostrarConfirmacionTratamiento;
+    private bool _mostrarConfirmacionMedicamento;
+    private string _medicamentoSeleccionado = string.Empty;
+    private bool _medicamentoEsOtro;
+
+    private List<ExamenDto> _examenes = new();
+    private bool _cargandoExamenes;
+    private bool _mostrarNuevoExamen;
+    private FormExamen _nuevoExamen = new();
+    private int? _examenEditando;
+    private FormResultado _formResultado = new();
+
+    private IEnumerable<PacienteDto> PacientesFiltrados => string.IsNullOrWhiteSpace(_textoPaciente)
+        ? _pacientes
+        : _pacientes.Where(p => _campoPaciente == "identificacion"
+            ? Contiene(p.Identificacion, _textoPaciente.Trim())
+            : Contiene($"{p.Nombres} {p.Apellidos}", _textoPaciente.Trim()));
+
+    protected override async Task OnInitializedAsync()
+    {
+        await CargarPacientesAsync();
+
+        try
+        {
+            _catalogoTratamientos = (await TratamientosApi.ObtenerTodosAsync()).ToList();
+        }
+        catch
+        {
+            // Sin acceso al catálogo el formulario de tratamientos queda vacío.
+        }
+
+        try
+        {
+            _catalogoMedicamentos = (await ExpedientesApi.ListarMedicamentosAsync()).ToList();
+        }
+        catch
+        {
+            // Sin sugerencias el formulario permite escribir el medicamento manualmente.
+        }
+
+        try
+        {
+            _miOdontologo = await CitasApi.ObtenerMiOdontologoAsync();
+        }
+        catch
+        {
+            // Un usuario sin perfil de odontologo no puede listar citas clinicas.
+        }
+
+        await AplicarParametrosAsync();
+    }
+
+    private async Task AplicarParametrosAsync()
+    {
+        if (!PacienteIdQuery.HasValue)
+        {
+            return;
+        }
+
+        var paciente = _pacientes.FirstOrDefault(p => p.IdPaciente == PacienteIdQuery.Value);
+        if (paciente is null)
+        {
+            return;
+        }
+
+        await SeleccionarPacienteAsync(paciente);
+
+        if (!CitaIdQuery.HasValue)
+        {
+            return;
+        }
+
+        _citaEnCurso = await ObtenerCitaEnCursoAsync(CitaIdQuery.Value, paciente.IdPaciente);
+        if (_citaEnCurso is not null)
+        {
+            _nuevaAtencion.IdCita = _citaEnCurso.IdCita.ToString(CultureInfo.InvariantCulture);
+        }
+    }
+
+    private async Task<CitaDto?> ObtenerCitaEnCursoAsync(int idCita, int idPaciente)
+    {
+        var deLista = _citasParaAtencion.FirstOrDefault(c => c.IdCita == idCita && c.IdPaciente == idPaciente);
+        if (deLista is not null)
+        {
+            return MapearCita(deLista);
+        }
+
+        try
+        {
+            var cita = await CitasApi.ObtenerCitaAsync(idCita);
+            if (cita is null || cita.IdPaciente != idPaciente || cita.Estado is not ("En espera" or "En atencion"))
+            {
+                return null;
+            }
+
+            _atencionRegistradaEnCurso = true;
+            return cita;
+        }
+        catch
+        {
+            return null;
+        }
+    }
+
+    private static CitaDto MapearCita(CitaParaAtencionDto cita) => new()
+    {
+        IdCita = cita.IdCita,
+        IdPaciente = cita.IdPaciente,
+        IdOdontologo = cita.IdOdontologo,
+        FechaHoraInicio = cita.FechaHoraInicio,
+        FechaHoraFin = cita.FechaHoraFin,
+        Estado = cita.Estado,
+        Motivo = cita.Motivo,
+        DuracionMinutos = cita.DuracionMinutos,
+        NombrePaciente = cita.NombrePaciente,
+        NombreTratamiento = cita.NombreTratamiento
+    };
+
+    private async Task CargarPacientesAsync()
+    {
+        try
+        {
+            _cargandoPacientes = true;
+            _pacientes = (await PacientesApi.ObtenerTodosAsync()).Where(p => p.Activo).OrderBy(p => p.Apellidos).ThenBy(p => p.Nombres).ToList();
+        }
+        catch (Exception ex)
+        {
+            ToastService.Mostrar("Error", $"No se pudieron cargar los pacientes: {ex.Message}", ToastTipo.Error);
+        }
+        finally
+        {
+            _cargandoPacientes = false;
+        }
+    }
+
+    private void CambiarCampoPaciente(string campo) => _campoPaciente = campo;
+
+    private async Task SeleccionarPacienteAsync(PacienteDto paciente)
+    {
+        _pacienteSeleccionado = paciente;
+        _pestana = "expediente";
+        _editandoExpediente = false;
+        _mostrarNuevaAtencion = false;
+        _atencionEditando = null;
+        _atencionExpandida = null;
+        _examenEditando = null;
+        _mostrarNuevoExamen = false;
+        _citaEnCurso = null;
+        _atencionRegistradaEnCurso = false;
+        _detalles.Clear();
+        await CargarExpedienteAsync();
+        await CargarExamenesAsync();
+        await CargarCitasParaAtencionAsync();
+    }
+
+    private async Task CargarCitasParaAtencionAsync()
+    {
+        if (_pacienteSeleccionado is null || _miOdontologo is null)
+        {
+            _citasParaAtencion = new List<CitaParaAtencionDto>();
+            return;
+        }
+
+        try
+        {
+            _cargandoCitasParaAtencion = true;
+            _citasParaAtencion = (await CitasApi.ListarParaAtencionAsync(
+                _pacienteSeleccionado.IdPaciente)).ToList();
+        }
+        catch (ApiException ex) when (ex.Status == 403)
+        {
+            // Un usuario sin perfil de odontologo no tiene citas clinicas que atender.
+            _citasParaAtencion = new List<CitaParaAtencionDto>();
+        }
+        catch (Exception)
+        {
+            _citasParaAtencion = new List<CitaParaAtencionDto>();
+        }
+        finally
+        {
+            _cargandoCitasParaAtencion = false;
+        }
+    }
+
+    private async Task CargarExpedienteAsync()
+    {
+        if (_pacienteSeleccionado is null) return;
+
+        try
+        {
+            _cargandoExpediente = true;
+            _expediente = await ExpedientesApi.ObtenerPorPacienteAsync(_pacienteSeleccionado.IdPaciente);
+        }
+        catch (Exception ex)
+        {
+            _expediente = null;
+            ToastService.Mostrar("Error", ex.Message, ToastTipo.Error);
+        }
+        finally
+        {
+            _cargandoExpediente = false;
+        }
+    }
+
+    private async Task CargarExamenesAsync()
+    {
+        if (_pacienteSeleccionado is null) return;
+
+        try
+        {
+            _cargandoExamenes = true;
+            _examenes = (await ExpedientesApi.ObtenerExamenesAsync(_pacienteSeleccionado.IdPaciente)).ToList();
+        }
+        catch (Exception ex)
+        {
+            _examenes = new List<ExamenDto>();
+            ToastService.Mostrar("Error", ex.Message, ToastTipo.Error);
+        }
+        finally
+        {
+            _cargandoExamenes = false;
+        }
+    }
+
+    private void AlternarEdicionExpediente()
+    {
+        if (_expediente is null) return;
+
+        _editandoExpediente = !_editandoExpediente;
+        _formExpediente = new FormExpediente
+        {
+            Estado = _expediente.Estado,
+            ObservacionesGenerales = _expediente.ObservacionesGenerales ?? string.Empty
+        };
+    }
+
+    private async Task GuardarExpedienteAsync()
+    {
+        if (_expediente is null) return;
+
+        await EjecutarAsync(async () =>
+        {
+            await ExpedientesApi.ActualizarExpedienteAsync(_expediente.IdExpediente, new ActualizacionExpedienteDto
+            {
+                ObservacionesGenerales = _formExpediente.ObservacionesGenerales,
+                Estado = _formExpediente.Estado
+            });
+            _editandoExpediente = false;
+            await CargarExpedienteAsync();
+        }, "Expediente actualizado.");
+    }
+
+    private async Task AlternarNuevaAtencionAsync()
+    {
+        _mostrarNuevaAtencion = !_mostrarNuevaAtencion;
+        _nuevaAtencion = new FormNuevaAtencion();
+
+        if (!_mostrarNuevaAtencion)
+        {
+            return;
+        }
+
+        await CargarCitasParaAtencionAsync();
+
+        if (_citaEnCurso is not null && !_atencionRegistradaEnCurso)
+        {
+            _nuevaAtencion.IdCita = _citaEnCurso.IdCita.ToString(CultureInfo.InvariantCulture);
+        }
+    }
+
+    private async Task PrepararAtencionEnCursoAsync()
+    {
+        _mostrarNuevaAtencion = true;
+        _nuevaAtencion = new FormNuevaAtencion
+        {
+            IdCita = _citaEnCurso?.IdCita.ToString(CultureInfo.InvariantCulture) ?? string.Empty
+        };
+
+        await CargarCitasParaAtencionAsync();
+    }
+
+    private async Task FinalizarAtencionAsync()
+    {
+        if (_citaEnCurso is null)
+        {
+            return;
+        }
+
+        await EjecutarAsync(async () =>
+        {
+            await CitasApi.FinalizarAtencionAsync(_citaEnCurso.IdCita);
+            _citaEnCurso = null;
+            _atencionRegistradaEnCurso = false;
+            _mostrarNuevaAtencion = false;
+            await CargarExpedienteAsync();
+            await CargarCitasParaAtencionAsync();
+        }, "Atención finalizada. La cita quedó completada.");
+    }
+
+    private async Task GuardarNuevaAtencionAsync()
+    {
+        if (!int.TryParse(_nuevaAtencion.IdCita, NumberStyles.Integer, CultureInfo.InvariantCulture, out var idCita) || idCita <= 0)
+        {
+            ToastService.Mostrar("Datos incompletos", "Selecciona la cita que se está atendiendo.", ToastTipo.Error);
+            return;
+        }
+
+        if (string.IsNullOrWhiteSpace(_nuevaAtencion.Diagnostico))
+        {
+            ToastService.Mostrar("Datos incompletos", "El diagnóstico es obligatorio.", ToastTipo.Error);
+            return;
+        }
+
+        var citaSeleccionada = _citasParaAtencion.FirstOrDefault(c => c.IdCita == idCita);
+
+        await EjecutarAsync(async () =>
+        {
+            await ExpedientesApi.RegistrarAtencionAsync(idCita, new CreacionAtencionDto
+            {
+                Diagnostico = _nuevaAtencion.Diagnostico.Trim(),
+                Observaciones = Nulo(_nuevaAtencion.Observaciones),
+                Resultado = Nulo(_nuevaAtencion.Resultado),
+                Recomendaciones = Nulo(_nuevaAtencion.Recomendaciones)
+            });
+            _mostrarNuevaAtencion = false;
+            if (citaSeleccionada is not null)
+            {
+                _citaEnCurso = MapearCita(citaSeleccionada);
+                _atencionRegistradaEnCurso = true;
+            }
+            await CargarExpedienteAsync();
+            await CargarCitasParaAtencionAsync();
+        }, "Atención registrada.");
+    }
+
+    private void IniciarEdicionAtencion(AtencionDto atencion)
+    {
+        _atencionEditando = _atencionEditando == atencion.IdAtencion ? null : atencion.IdAtencion;
+        _editAtencion = new ActualizacionAtencionDto
+        {
+            Diagnostico = atencion.Diagnostico,
+            Observaciones = atencion.Observaciones,
+            Resultado = atencion.Resultado,
+            Recomendaciones = atencion.Recomendaciones
+        };
+    }
+
+    private async Task GuardarEdicionAtencionAsync(int idAtencion)
+    {
+        if (string.IsNullOrWhiteSpace(_editAtencion.Diagnostico))
+        {
+            ToastService.Mostrar("Datos incompletos", "El diagnóstico es obligatorio.", ToastTipo.Error);
+            return;
+        }
+
+        await EjecutarAsync(async () =>
+        {
+            await ExpedientesApi.ActualizarAtencionAsync(idAtencion, new ActualizacionAtencionDto
+            {
+                Diagnostico = _editAtencion.Diagnostico.Trim(),
+                Observaciones = Nulo(_editAtencion.Observaciones),
+                Resultado = Nulo(_editAtencion.Resultado),
+                Recomendaciones = Nulo(_editAtencion.Recomendaciones)
+            });
+            _atencionEditando = null;
+            await CargarExpedienteAsync();
+        }, "Atención actualizada.");
+    }
+
+    private async Task AlternarDetalleAsync(int idAtencion)
+    {
+        if (_atencionExpandida == idAtencion)
+        {
+            _atencionExpandida = null;
+            return;
+        }
+
+        _atencionExpandida = idAtencion;
+        CerrarFormularioTratamiento();
+        CerrarFormularioMedicamento();
+
+        try
+        {
+            _detalles[idAtencion] = await ExpedientesApi.ObtenerDetalleAtencionAsync(idAtencion);
+        }
+        catch (Exception ex)
+        {
+            _atencionExpandida = null;
+            ToastService.Mostrar("Error", ex.Message, ToastTipo.Error);
+        }
+    }
+
+    private static readonly CultureInfo CulturaColones = CultureInfo.GetCultureInfo("es-CR");
+
+    private void AlCambiarTratamiento()
+    {
+        var catalogo = _catalogoTratamientos.FirstOrDefault(t =>
+            t.IdTratamiento == _nuevoTratamiento.IdTratamiento);
+
+        _nuevoTratamiento.Precio = catalogo is null
+            ? string.Empty
+            : catalogo.Precio.ToString("0.00", CultureInfo.InvariantCulture);
+    }
+
+    private bool EsDueno(AtencionDto atencion) =>
+        _miOdontologo is not null && _miOdontologo.IdOdontologo == atencion.IdOdontologo;
+
+    private void AlternarFormularioTratamiento(int idAtencion)
+    {
+        if (_atencionAgregandoTratamiento == idAtencion)
+        {
+            CerrarFormularioTratamiento();
+            return;
+        }
+
+        _atencionAgregandoTratamiento = idAtencion;
+        _detalleTratamientoEditando = null;
+        _nuevoTratamiento = new FormTratamiento();
+    }
+
+    private void EditarTratamiento(int idAtencion, TratamientoAtencionDto tratamiento)
+    {
+        _atencionAgregandoTratamiento = idAtencion;
+        _detalleTratamientoEditando = tratamiento.IdDetalleAtencion;
+        _nuevoTratamiento = new FormTratamiento
+        {
+            IdTratamiento = tratamiento.IdTratamiento,
+            Precio = tratamiento.PrecioAplicado.ToString("0.00", CultureInfo.InvariantCulture),
+            Descripcion = tratamiento.Descripcion
+        };
+    }
+
+    private void CerrarFormularioTratamiento()
+    {
+        _atencionAgregandoTratamiento = null;
+        _detalleTratamientoEditando = null;
+        _nuevoTratamiento = new FormTratamiento();
+    }
+
+    private void AlternarFormularioMedicamento(int idAtencion)
+    {
+        if (_atencionAgregandoMedicamento == idAtencion)
+        {
+            CerrarFormularioMedicamento();
+            return;
+        }
+
+        _atencionAgregandoMedicamento = idAtencion;
+        _medicamentoEditando = null;
+        _nuevoMedicamento = new FormMedicamento();
+        _medicamentoSeleccionado = string.Empty;
+        _medicamentoEsOtro = false;
+    }
+
+    private void EditarMedicamento(int idAtencion, MedicamentoIndicadoDto medicamento)
+    {
+        _atencionAgregandoMedicamento = idAtencion;
+        _medicamentoEditando = medicamento.IdMedicamentoIndicado;
+        _nuevoMedicamento = new FormMedicamento
+        {
+            NombreMedicamento = medicamento.NombreMedicamento,
+            Precio = medicamento.Precio.ToString("0.00", CultureInfo.InvariantCulture),
+            Dosis = medicamento.Dosis,
+            Frecuencia = medicamento.Frecuencia,
+            Duracion = medicamento.Duracion,
+            Indicaciones = medicamento.Indicaciones
+        };
+
+        var existe = _catalogoMedicamentos.Any(c =>
+            string.Equals(c.NombreMedicamento, medicamento.NombreMedicamento, StringComparison.OrdinalIgnoreCase));
+        _medicamentoSeleccionado = existe ? medicamento.NombreMedicamento : "__otro__";
+        _medicamentoEsOtro = !existe;
+    }
+
+    private void CerrarFormularioMedicamento()
+    {
+        _atencionAgregandoMedicamento = null;
+        _medicamentoEditando = null;
+        _nuevoMedicamento = new FormMedicamento();
+        _medicamentoSeleccionado = string.Empty;
+        _medicamentoEsOtro = false;
+    }
+
+    private void SolicitarEliminarTratamiento(TratamientoAtencionDto tratamiento)
+    {
+        _tratamientoAEliminar = tratamiento;
+        _mostrarConfirmacionTratamiento = true;
+    }
+
+    private void CancelarEliminarTratamiento()
+    {
+        _mostrarConfirmacionTratamiento = false;
+        _tratamientoAEliminar = null;
+    }
+
+    private async Task ConfirmarEliminarTratamientoAsync()
+    {
+        if (_tratamientoAEliminar is null || _atencionExpandida is null)
+        {
+            return;
+        }
+
+        var idDetalle = _tratamientoAEliminar.IdDetalleAtencion;
+        var idAtencion = _atencionExpandida.Value;
+
+        await EjecutarAsync(async () =>
+        {
+            await ExpedientesApi.EliminarTratamientoAsync(idDetalle);
+            _mostrarConfirmacionTratamiento = false;
+            _tratamientoAEliminar = null;
+            if (_detalleTratamientoEditando == idDetalle)
+            {
+                CerrarFormularioTratamiento();
+            }
+            _detalles[idAtencion] = await ExpedientesApi.ObtenerDetalleAtencionAsync(idAtencion);
+        }, "Tratamiento eliminado.");
+    }
+
+    private void SolicitarEliminarMedicamento(MedicamentoIndicadoDto medicamento)
+    {
+        _medicamentoAEliminar = medicamento;
+        _mostrarConfirmacionMedicamento = true;
+    }
+
+    private void CancelarEliminarMedicamento()
+    {
+        _mostrarConfirmacionMedicamento = false;
+        _medicamentoAEliminar = null;
+    }
+
+    private async Task ConfirmarEliminarMedicamentoAsync()
+    {
+        if (_medicamentoAEliminar is null || _atencionExpandida is null)
+        {
+            return;
+        }
+
+        var idMedicamento = _medicamentoAEliminar.IdMedicamentoIndicado;
+        var idAtencion = _atencionExpandida.Value;
+
+        await EjecutarAsync(async () =>
+        {
+            await ExpedientesApi.EliminarMedicamentoAsync(idMedicamento);
+            _mostrarConfirmacionMedicamento = false;
+            _medicamentoAEliminar = null;
+            if (_medicamentoEditando == idMedicamento)
+            {
+                CerrarFormularioMedicamento();
+            }
+            _detalles[idAtencion] = await ExpedientesApi.ObtenerDetalleAtencionAsync(idAtencion);
+        }, "Medicamento eliminado.");
+    }
+
+    private void AplicarMedicamentoSeleccionado()
+    {
+        if (_medicamentoSeleccionado == "__otro__")
+        {
+            _medicamentoEsOtro = true;
+            _nuevoMedicamento = new FormMedicamento();
+            return;
+        }
+
+        _medicamentoEsOtro = false;
+        var medicamento = _catalogoMedicamentos.FirstOrDefault(m =>
+            string.Equals(m.NombreMedicamento, _medicamentoSeleccionado, StringComparison.OrdinalIgnoreCase));
+
+        _nuevoMedicamento = medicamento is null
+            ? new FormMedicamento()
+            : new FormMedicamento
+            {
+                NombreMedicamento = medicamento.NombreMedicamento,
+                Dosis = medicamento.Dosis,
+                Frecuencia = medicamento.Frecuencia,
+                Duracion = medicamento.Duracion,
+                Indicaciones = medicamento.Indicaciones,
+                Precio = medicamento.Precio.ToString("0.00", CultureInfo.InvariantCulture)
+            };
+    }
+
+    private async Task GuardarTratamientoAsync(int idAtencion)
+    {
+        if (_nuevoTratamiento.IdTratamiento <= 0)
+        {
+            ToastService.Mostrar("Datos incompletos", "Selecciona un tratamiento del catálogo.", ToastTipo.Error);
+            return;
+        }
+
+        if (!TryParsearPrecio(_nuevoTratamiento.Precio, out var precio))
+        {
+            ToastService.Mostrar("Datos inválidos", "El precio aplicado no es un número válido.", ToastTipo.Error);
+            return;
+        }
+
+        var dto = new CreacionTratamientoAtencionDto
+        {
+            IdTratamiento = _nuevoTratamiento.IdTratamiento,
+            PrecioAplicado = precio,
+            Descripcion = Nulo(_nuevoTratamiento.Descripcion)
+        };
+
+        await EjecutarAsync(async () =>
+        {
+            if (_detalleTratamientoEditando is int idDetalle)
+            {
+                await ExpedientesApi.ActualizarTratamientoAsync(idDetalle, dto);
+            }
+            else
+            {
+                await ExpedientesApi.RegistrarTratamientoAsync(idAtencion, dto);
+            }
+
+            CerrarFormularioTratamiento();
+            _detalles[idAtencion] = await ExpedientesApi.ObtenerDetalleAtencionAsync(idAtencion);
+        }, "Tratamiento guardado.");
+    }
+
+    private async Task GuardarMedicamentoAsync(int idAtencion)
+    {
+        if (string.IsNullOrWhiteSpace(_nuevoMedicamento.NombreMedicamento))
+        {
+            ToastService.Mostrar(
+                "Datos incompletos",
+                _medicamentoEsOtro
+                    ? "Escribe el nombre del medicamento."
+                    : "Selecciona un medicamento o elige la opción Otro.",
+                ToastTipo.Error);
+            return;
+        }
+
+        if (!TryParsearPrecio(_nuevoMedicamento.Precio, out var precioMedicamento))
+        {
+            ToastService.Mostrar("Datos inválidos", "El precio del medicamento no es un número válido.", ToastTipo.Error);
+            return;
+        }
+
+        var dto = new CreacionMedicamentoIndicadoDto
+        {
+            NombreMedicamento = _nuevoMedicamento.NombreMedicamento.Trim(),
+            Dosis = Nulo(_nuevoMedicamento.Dosis),
+            Frecuencia = Nulo(_nuevoMedicamento.Frecuencia),
+            Duracion = Nulo(_nuevoMedicamento.Duracion),
+            Indicaciones = Nulo(_nuevoMedicamento.Indicaciones),
+            Precio = precioMedicamento
+        };
+
+        await EjecutarAsync(async () =>
+        {
+            if (_medicamentoEditando is int idMedicamento)
+            {
+                await ExpedientesApi.ActualizarMedicamentoAsync(idMedicamento, dto);
+            }
+            else
+            {
+                await ExpedientesApi.RegistrarMedicamentoAsync(idAtencion, dto);
+            }
+
+            CerrarFormularioMedicamento();
+            _detalles[idAtencion] = await ExpedientesApi.ObtenerDetalleAtencionAsync(idAtencion);
+        }, "Medicamento guardado.");
+    }
+
+    private async Task GuardarExamenAsync()
+    {
+        if (_pacienteSeleccionado is null) return;
+
+        if (string.IsNullOrWhiteSpace(_nuevoExamen.TipoExamen))
+        {
+            ToastService.Mostrar("Datos incompletos", "El tipo de examen es obligatorio.", ToastTipo.Error);
+            return;
+        }
+
+        var idAtencion = (int?)null;
+        if (!string.IsNullOrWhiteSpace(_nuevoExamen.IdAtencion))
+        {
+            if (!int.TryParse(_nuevoExamen.IdAtencion, NumberStyles.Integer, CultureInfo.InvariantCulture, out var valor) || valor <= 0)
+            {
+                ToastService.Mostrar("Datos inválidos", "El ID de la atención no es válido.", ToastTipo.Error);
+                return;
+            }
+            idAtencion = valor;
+        }
+
+        var idPaciente = _pacienteSeleccionado.IdPaciente;
+        await EjecutarAsync(async () =>
+        {
+            await ExpedientesApi.RegistrarExamenAsync(idPaciente, new CreacionExamenDto
+            {
+                IdAtencion = idAtencion,
+                TipoExamen = _nuevoExamen.TipoExamen.Trim(),
+                FechaSolicitud = Fecha(_nuevoExamen.FechaSolicitud),
+                FechaRealizacion = Fecha(_nuevoExamen.FechaRealizacion),
+                Observaciones = Nulo(_nuevoExamen.Observaciones)
+            });
+            _nuevoExamen = new FormExamen();
+            _mostrarNuevoExamen = false;
+            await CargarExamenesAsync();
+        }, "Examen registrado.");
+    }
+
+    private void IniciarResultadoExamen(ExamenDto examen)
+    {
+        _examenEditando = _examenEditando == examen.IdExamen ? null : examen.IdExamen;
+        _formResultado = new FormResultado
+        {
+            Estado = examen.Estado == "Solicitado" && examen.FechaRealizacion is null ? "Solicitado" : examen.Estado,
+            FechaRealizacion = examen.FechaRealizacion?.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture) ?? string.Empty,
+            Resultado = examen.Resultado ?? string.Empty,
+            Observaciones = examen.Observaciones ?? string.Empty
+        };
+    }
+
+    private async Task GuardarResultadoExamenAsync(int idExamen)
+    {
+        if (_formResultado.Estado == "Realizado" && (Fecha(_formResultado.FechaRealizacion) is null || string.IsNullOrWhiteSpace(_formResultado.Resultado)))
+        {
+            ToastService.Mostrar("Datos incompletos", "Un examen realizado requiere fecha de realización y resultado.", ToastTipo.Error);
+            return;
+        }
+
+        await EjecutarAsync(async () =>
+        {
+            await ExpedientesApi.RegistrarResultadoExamenAsync(idExamen, new ActualizacionResultadoExamenDto
+            {
+                Estado = _formResultado.Estado,
+                FechaRealizacion = Fecha(_formResultado.FechaRealizacion),
+                Resultado = Nulo(_formResultado.Resultado),
+                Observaciones = Nulo(_formResultado.Observaciones)
+            });
+            _examenEditando = null;
+            await CargarExamenesAsync();
+        }, "Resultado guardado.");
+    }
+
+    private async Task EjecutarAsync(Func<Task> operacion, string mensajeExito)
+    {
+        try
+        {
+            _guardando = true;
+            await operacion();
+            ToastService.Mostrar("Listo", mensajeExito, ToastTipo.Exito);
+        }
+        catch (Exception ex)
+        {
+            ToastService.Mostrar("No se pudo guardar", ex.Message, ToastTipo.Error);
+        }
+        finally
+        {
+            _guardando = false;
+        }
+    }
+
+    private static bool Contiene(string? valor, string termino) =>
+        !string.IsNullOrEmpty(valor) && valor.Contains(termino, StringComparison.OrdinalIgnoreCase);
+
+    private static string? Nulo(string? valor) => string.IsNullOrWhiteSpace(valor) ? null : valor.Trim();
+
+    private static DateTime? Fecha(string? texto) =>
+        DateTime.TryParseExact(texto, "yyyy-MM-dd", CultureInfo.InvariantCulture, DateTimeStyles.None, out var fecha)
+            ? fecha
+            : null;
+
+    private static bool TryParsearPrecio(string? texto, out decimal? precio)
+    {
+        precio = null;
+        if (string.IsNullOrWhiteSpace(texto)) return true;
+
+        // El campo se llena con punto decimal (Invariant). Se intenta primero
+        // ese formato para que valores como "90000.00" no se interpreten como
+        // millones en culturas donde el punto es separador de miles.
+        if (decimal.TryParse(texto, NumberStyles.Number, CultureInfo.InvariantCulture, out var valor)
+            || decimal.TryParse(texto, NumberStyles.Number, CultureInfo.CurrentCulture, out valor))
+        {
+            precio = valor;
+            return valor >= 0;
+        }
+
+        return false;
+    }
+
+    private static string Iniciales(PacienteDto paciente)
+    {
+        var inicial1 = paciente.Nombres.Trim().FirstOrDefault();
+        var inicial2 = paciente.Apellidos.Trim().FirstOrDefault();
+        return $"{inicial1}{inicial2}".ToUpperInvariant();
+    }
+
+    private static string ClaseEstadoExamen(string estado) => estado switch
+    {
+        "Realizado" => "badge--success",
+        "Cancelado" => "badge--danger",
+        "En proceso" => "badge--info",
+        _ => "badge--neutral"
+    };
+
+    private sealed class FormExpediente
+    {
+        public string Estado { get; set; } = "Abierto";
+        public string ObservacionesGenerales { get; set; } = string.Empty;
+    }
+
+    private sealed class FormNuevaAtencion
+    {
+        public string IdCita { get; set; } = string.Empty;
+        public string Diagnostico { get; set; } = string.Empty;
+        public string? Observaciones { get; set; }
+        public string? Resultado { get; set; }
+        public string? Recomendaciones { get; set; }
+    }
+
+    private sealed class FormTratamiento
+    {
+        public int IdTratamiento { get; set; }
+        public string? Precio { get; set; }
+        public string? Descripcion { get; set; }
+    }
+
+    private sealed class FormMedicamento
+    {
+        public string NombreMedicamento { get; set; } = string.Empty;
+        public string? Precio { get; set; }
+        public string? Dosis { get; set; }
+        public string? Frecuencia { get; set; }
+        public string? Duracion { get; set; }
+        public string? Indicaciones { get; set; }
+    }
+
+    private sealed class FormExamen
+    {
+        public string TipoExamen { get; set; } = string.Empty;
+        public string FechaSolicitud { get; set; } = string.Empty;
+        public string FechaRealizacion { get; set; } = string.Empty;
+        public string IdAtencion { get; set; } = string.Empty;
+        public string? Observaciones { get; set; }
+    }
+
+    private sealed class FormResultado
+    {
+        public string Estado { get; set; } = "Solicitado";
+        public string FechaRealizacion { get; set; } = string.Empty;
+        public string Resultado { get; set; } = string.Empty;
+        public string Observaciones { get; set; } = string.Empty;
+    }
+}

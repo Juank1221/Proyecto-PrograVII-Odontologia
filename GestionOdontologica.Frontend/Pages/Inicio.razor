@@ -1,5 +1,8 @@
+@page "/"
 @page "/inicio"
 @attribute [Authorize]
+@inject SaludApiService Salud
+@implements IDisposable
 
 <PageTitle>Inicio | OdontoCare</PageTitle>
 
@@ -11,13 +14,106 @@
         </div>
     </section>
 
-    <section class="card placeholder-card">
-        <div class="table-state">
-            <div class="table-state__icon" aria-hidden="true">
-                <svg class="icon"><use href="#icon-home"></use></svg>
+    <section class="inicio-hero" aria-labelledby="inicio-titulo">
+        <img class="inicio-hero__imagen"
+             src="images/Fondo%20dental%20moderno%20OdontoCare.png"
+             alt=""
+             aria-hidden="true"
+             loading="eager" />
+        <div class="inicio-hero__overlay" aria-hidden="true"></div>
+
+        <div class="inicio-hero__copy">
+            <span class="inicio-hero__badge">OdontoCare · Clínica dental</span>
+            <h2 id="inicio-titulo">Bienvenido a OdontoCare</h2>
+            <p>
+                Gestiona pacientes, expedientes clínicos, tratamientos y exámenes
+                desde un solo lugar.
+            </p>
+            <div class="inicio-hero__acciones">
+                <a class="button button--primary" href="pacientes">
+                    <svg class="icon" aria-hidden="true"><use href="#icon-users"></use></svg>
+                    Ir a Pacientes
+                </a>
+                <a class="button button--secondary" href="expedientes">
+                    <svg class="icon" aria-hidden="true"><use href="#icon-folder"></use></svg>
+                    Ver Expedientes
+                </a>
             </div>
-            <strong>Bienvenido a OdontoCare</strong>
-            <p>Utiliza el menú lateral para navegar por los módulos del sistema.</p>
+        </div>
+    </section>
+
+    <section class="inicio-accesos" aria-labelledby="accesos-titulo">
+        <header class="inicio-accesos__header">
+            <h2 id="accesos-titulo">Accesos rápidos</h2>
+            <p>Entra directamente a los módulos que más usas.</p>
+        </header>
+
+        <div class="inicio-accesos__grid">
+            <a class="acceso-rapido" href="citas">
+                <span class="acceso-rapido__icon" aria-hidden="true">
+                    <svg class="icon"><use href="#icon-calendar"></use></svg>
+                </span>
+                <span class="acceso-rapido__copy">
+                    <strong>Citas</strong>
+                    <small>Agenda, confirmaciones y estado de las consultas.</small>
+                </span>
+                <svg class="icon acceso-rapido__flecha" aria-hidden="true"><use href="#icon-chevron-right"></use></svg>
+            </a>
+
+            <a class="acceso-rapido" href="tratamientos">
+                <span class="acceso-rapido__icon" aria-hidden="true">
+                    <svg class="icon"><use href="#icon-tooth"></use></svg>
+                </span>
+                <span class="acceso-rapido__copy">
+                    <strong>Tratamientos</strong>
+                    <small>Catálogo de procedimientos y planes clínicos.</small>
+                </span>
+                <svg class="icon acceso-rapido__flecha" aria-hidden="true"><use href="#icon-chevron-right"></use></svg>
+            </a>
+
+            <a class="acceso-rapido" href="radiografias">
+                <span class="acceso-rapido__icon" aria-hidden="true">
+                    <svg class="icon"><use href="#icon-scan"></use></svg>
+                </span>
+                <span class="acceso-rapido__copy">
+                    <strong>Radiografías y Exámenes</strong>
+                    <small>Estudios de imagen y resultados del paciente.</small>
+                </span>
+                <svg class="icon acceso-rapido__flecha" aria-hidden="true"><use href="#icon-chevron-right"></use></svg>
+            </a>
+
+            <a class="acceso-rapido" href="reportes">
+                <span class="acceso-rapido__icon" aria-hidden="true">
+                    <svg class="icon"><use href="#icon-chart"></use></svg>
+                </span>
+                <span class="acceso-rapido__copy">
+                    <strong>Reportes</strong>
+                    <small>Indicadores de atención y actividad de la clínica.</small>
+                </span>
+                <svg class="icon acceso-rapido__flecha" aria-hidden="true"><use href="#icon-chevron-right"></use></svg>
+            </a>
         </div>
     </section>
 </div>
+
+@code {
+    private readonly CancellationTokenSource _cts = new();
+
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            await Salud.ProbarConexionAsync(_cts.Token);
+        }
+        catch (Exception) when (!_cts.IsCancellationRequested)
+        {
+            // El topbar ya muestra el estado (sin conexión o con error) desde AuthHeaderHandler.
+        }
+    }
+
+    public void Dispose()
+    {
+        _cts.Cancel();
+        _cts.Dispose();
+    }
+}

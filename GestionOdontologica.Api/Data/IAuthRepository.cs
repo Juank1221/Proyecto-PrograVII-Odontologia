@@ -20,7 +20,8 @@ public sealed record ResultadoInicioSesion(
     EstadoInicioSesion Estado,
     UsuarioDto? Usuario = null,
     int SegundosBloqueo = 0,
-    int IntentosRestantes = 0);
+    int IntentosRestantes = 0,
+    int? IdUsuario = null);
 
 /// <summary>
 /// Resultado de una solicitud de recuperación. <see cref="Token"/> solo se

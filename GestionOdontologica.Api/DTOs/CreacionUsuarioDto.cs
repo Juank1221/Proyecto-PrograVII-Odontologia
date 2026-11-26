@@ -11,6 +11,7 @@ public sealed class CreacionUsuarioDto
 {
     [Required(ErrorMessage = "El nombre completo es obligatorio.")]
     [StringLength(150, MinimumLength = 3, ErrorMessage = "El nombre completo debe tener entre 3 y 150 caracteres.")]
+    [NombrePersona]
     public string NombreCompleto { get; set; } = string.Empty;
 
     [Required(ErrorMessage = "El nombre de usuario es obligatorio.")]

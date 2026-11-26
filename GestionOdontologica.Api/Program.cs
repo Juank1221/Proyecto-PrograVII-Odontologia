@@ -9,6 +9,16 @@ using Microsoft.OpenApi.Models;
 
 var builder = WebApplication.CreateBuilder(args);
 
+// Los secretos de usuario (por ejemplo Email:Password) se cargan de forma
+// automatica solo en Development. Se agregan tambien en otros entornos locales
+// como el perfil http-PROD de Visual Studio, para no guardar la contrasena en
+// archivos del proyecto. En un despliegue real usa la variable de entorno
+// Email__Password y quita esta linea.
+if (!builder.Environment.IsDevelopment())
+{
+    builder.Configuration.AddUserSecrets<Program>(optional: true);
+}
+
 // Valida el catalogo de permisos antes de construir la aplicacion: si hay
 // codigos duplicados o inconsistentes con las politicas, falla al arrancar.
 PermisosCatalogo.Validar();
@@ -37,8 +47,12 @@ builder.Services.AddScoped<IUsuarioRepository, UsuarioRepository>();
 builder.Services.AddScoped<IAuthRepository, AuthRepository>();
 builder.Services.AddScoped<IPacienteRepository, PacienteRepository>();
 builder.Services.AddScoped<IAntecedenteRepository, AntecedenteRepository>();
+builder.Services.AddScoped<IExpedienteRepository, ExpedienteRepository>();
+builder.Services.AddScoped<IBitacoraRepository, BitacoraRepository>();
 builder.Services.AddScoped<IOdontologoRepository, OdontologoRepository>();
 builder.Services.AddScoped<IHorarioOdontologoRepository, HorarioOdontologoRepository>();
+builder.Services.AddScoped<ICitaRepository, CitaRepository>();
+builder.Services.AddScoped<GestionOdontologica.Api.Services.DisponibilidadCitasService>();
 builder.Services.AddScoped<ITratamientoRepository, TratamientoRepository>();
 builder.Services.AddScoped<IOdontologoTratamientoRepository, OdontologoTratamientoRepository>();
 builder.Services.AddScoped<IProductoRepository, ProductoRepository>();

@@ -42,7 +42,7 @@ public sealed class ProductoRepository : IProductoRepository
         await using var connection = _connectionFactory.CreateConnection();
         await connection.OpenAsync(cancellationToken);
         using var command = CrearProcedimiento("sp_insertar_producto", connection);
-        AgregarProductoEntradas(command, dto.IdCategoria, dto.Codigo, dto.Nombre, dto.Descripcion, dto.UnidadMedida, dto.StockMinimo, dto.PrecioCosto, dto.PrecioVenta, dto.RequiereCaducidad, true);
+        AgregarProductoEntradas(command, dto.IdCategoria, dto.Codigo, dto.Nombre, dto.Descripcion, dto.StockMinimo, dto.Cantidad, dto.Precio, dto.FechaCaducidad, true);
         var idSalida = command.Parameters.Add("p_id_producto", OracleDbType.Int32, ParameterDirection.Output);
         await command.ExecuteNonQueryAsync(cancellationToken);
         var producto = await ObtenerPorIdAsync(connection, idSalida.GetInt32Value(), cancellationToken);
@@ -75,9 +75,20 @@ public sealed class ProductoRepository : IProductoRepository
 
         using var command = CrearProcedimiento("sp_actualizar_producto", connection);
         AgregarEntrada(command, "p_id_producto", OracleDbType.Int32, null, id);
-        AgregarProductoEntradas(command, dto.IdCategoria, dto.Codigo, dto.Nombre, dto.Descripcion, dto.UnidadMedida, dto.StockMinimo, dto.PrecioCosto, dto.PrecioVenta, dto.RequiereCaducidad, dto.Activo ?? actual.Activo);
+        AgregarProductoEntradas(command, dto.IdCategoria, dto.Codigo, dto.Nombre, dto.Descripcion, dto.StockMinimo, dto.Cantidad, dto.Precio, dto.FechaCaducidad, dto.Activo ?? actual.Activo);
         await command.ExecuteNonQueryAsync(cancellationToken);
         return true;
+    }
+
+    public async Task<ProductoDto?> AumentarExistenciaAsync(int id, long cantidad, CancellationToken cancellationToken = default)
+    {
+        await using var connection = _connectionFactory.CreateConnection();
+        await connection.OpenAsync(cancellationToken);
+        using var command = CrearProcedimiento("sp_aumentar_existencia_producto", connection);
+        AgregarEntrada(command, "p_id_producto", OracleDbType.Int32, null, id);
+        AgregarEntrada(command, "p_cantidad", OracleDbType.Int64, null, cantidad);
+        await command.ExecuteNonQueryAsync(cancellationToken);
+        return await ObtenerPorIdAsync(connection, id, cancellationToken);
     }
 
     public async Task<bool> DesactivarAsync(int id, CancellationToken cancellationToken = default)
@@ -110,17 +121,16 @@ public sealed class ProductoRepository : IProductoRepository
         return productos.Count > 0 ? productos[0] : null;
     }
 
-    private static void AgregarProductoEntradas(OracleCommand command, int idCategoria, string? codigo, string nombre, string? descripcion, string unidadMedida, int stockMinimo, decimal precioCosto, decimal precioVenta, bool requiereCaducidad, bool activo)
+    private static void AgregarProductoEntradas(OracleCommand command, int idCategoria, string? codigo, string nombre, string? descripcion, decimal stockMinimo, decimal cantidad, decimal precio, DateTime? fechaCaducidad, bool activo)
     {
         AgregarEntrada(command, "p_id_categoria", OracleDbType.Int32, null, idCategoria);
         AgregarEntrada(command, "p_codigo", OracleDbType.Varchar2, 50, string.IsNullOrWhiteSpace(codigo) ? null : codigo.Trim());
         AgregarEntrada(command, "p_nombre", OracleDbType.Varchar2, 150, nombre.Trim());
         AgregarEntrada(command, "p_descripcion", OracleDbType.Varchar2, 255, string.IsNullOrWhiteSpace(descripcion) ? null : descripcion.Trim());
-        AgregarEntrada(command, "p_unidad_medida", OracleDbType.Varchar2, 30, unidadMedida.Trim());
-        AgregarEntrada(command, "p_stock_minimo", OracleDbType.Int32, null, stockMinimo);
-        AgregarEntrada(command, "p_precio_costo", OracleDbType.Decimal, null, precioCosto);
-        AgregarEntrada(command, "p_precio_venta", OracleDbType.Decimal, null, precioVenta);
-        AgregarEntrada(command, "p_requiere_caducidad", OracleDbType.Int32, null, requiereCaducidad ? 1 : 0);
+        AgregarEntrada(command, "p_stock_minimo", OracleDbType.Decimal, null, stockMinimo);
+        AgregarEntrada(command, "p_cantidad", OracleDbType.Decimal, null, cantidad);
+        AgregarEntrada(command, "p_precio", OracleDbType.Decimal, null, precio);
+        AgregarEntrada(command, "p_fecha_caducidad", OracleDbType.Date, null, fechaCaducidad);
         AgregarEntrada(command, "p_activo", OracleDbType.Int32, null, activo ? 1 : 0);
     }
 
@@ -160,11 +170,10 @@ public sealed class ProductoRepository : IProductoRepository
                 Codigo = LeerTexto(reader, "CODIGO"),
                 Nombre = LeerTexto(reader, "NOMBRE"),
                 Descripcion = LeerTexto(reader, "DESCRIPCION"),
-                UnidadMedida = LeerTexto(reader, "UNIDAD_MEDIDA"),
-                StockMinimo = LeerEntero(reader, "STOCK_MINIMO"),
-                PrecioCosto = LeerDecimal(reader, "PRECIO_COSTO"),
-                PrecioVenta = LeerDecimal(reader, "PRECIO_VENTA"),
-                RequiereCaducidad = LeerEntero(reader, "REQUIERE_CADUCIDAD") == 1,
+                StockMinimo = LeerDecimal(reader, "STOCK_MINIMO"),
+                Cantidad = LeerDecimal(reader, "CANTIDAD"),
+                Precio = LeerDecimal(reader, "PRECIO"),
+                FechaCaducidad = LeerFecha(reader, "FECHA_CADUCIDAD"),
                 Activo = activo
             });
         }
@@ -188,5 +197,11 @@ public sealed class ProductoRepository : IProductoRepository
     {
         var ordinal = reader.GetOrdinal(columna);
         return reader.IsDBNull(ordinal) ? 0m : Convert.ToDecimal(reader.GetValue(ordinal));
+    }
+
+    private static DateTime? LeerFecha(OracleDataReader reader, string columna)
+    {
+        var ordinal = reader.GetOrdinal(columna);
+        return reader.IsDBNull(ordinal) ? null : Convert.ToDateTime(reader.GetValue(ordinal));
     }
 }

@@ -38,7 +38,7 @@
                     <label for="productoCodigo">Código</label>
                     <input id="productoCodigo"
                            type="text"
-                           value="@(EsModoEdicion ? _modelo.Codigo : _codigoSugerido)"
+                           value="@_modelo.Codigo"
                            placeholder="Se generará automáticamente"
                            readonly
                            aria-readonly="true" />
@@ -75,33 +75,29 @@
 
             <div class="form-row">
                 <div class="field">
-                    <label for="productoUnidad">Unidad de medida</label>
-                    <InputText id="productoUnidad" @bind-Value="_modelo.UnidadMedida" maxlength="30" placeholder="Ej. caja, unidad, frasco" />
-                    <ValidationMessage For="() => _modelo.UnidadMedida" />
-                </div>
-                <div class="field">
                     <label for="productoMinimo">Stock mínimo</label>
                     <InputNumber id="productoMinimo" @bind-Value="_modelo.StockMinimo" min="0" />
                     <ValidationMessage For="() => _modelo.StockMinimo" />
+                </div>
+                <div class="field">
+                    <label for="productoCantidad">Cantidad en existencia</label>
+                    <InputNumber id="productoCantidad" @bind-Value="_modelo.Cantidad" min="0" />
+                    <ValidationMessage For="() => _modelo.Cantidad" />
                 </div>
             </div>
 
             <div class="form-row">
                 <div class="field">
-                    <label for="productoCosto">Precio de costo</label>
-                    <InputNumber id="productoCosto" @bind-Value="_modelo.PrecioCosto" min="0" step="0.01" />
-                    <ValidationMessage For="() => _modelo.PrecioCosto" />
+                    <label for="productoPrecio">Precio (₡)</label>
+                    <InputNumber id="productoPrecio" @bind-Value="_modelo.Precio" min="0" step="0.01" />
+                    <ValidationMessage For="() => _modelo.Precio" />
                 </div>
                 <div class="field">
-                    <label for="productoVenta">Precio de venta</label>
-                    <InputNumber id="productoVenta" @bind-Value="_modelo.PrecioVenta" min="0" step="0.01" />
-                    <ValidationMessage For="() => _modelo.PrecioVenta" />
+                    <label for="productoCaducidad">Fecha de caducidad <span class="label-optional">(opcional)</span></label>
+                    <InputDate id="productoCaducidad" @bind-Value="_modelo.FechaCaducidad" />
+                    <ValidationMessage For="() => _modelo.FechaCaducidad" />
                 </div>
             </div>
-
-            <label class="field-checkbox">
-                <InputCheckbox @bind-Value="_modelo.RequiereCaducidad" /> Requiere control de caducidad
-            </label>
 
             @if (EsModoEdicion)
             {
@@ -153,7 +149,6 @@
     private bool _activo = true;
     private bool _enviando;
     private bool _cargandoCategorias = true;
-    private string _codigoSugerido = string.Empty;
     private string? _error;
     private int? _idInicializado = int.MinValue;
     private bool EsModoEdicion => ProductoAEditar is not null;
@@ -198,11 +193,10 @@
             Codigo = ProductoAEditar.Codigo,
             Nombre = ProductoAEditar.Nombre,
             Descripcion = ProductoAEditar.Descripcion,
-            UnidadMedida = ProductoAEditar.UnidadMedida,
             StockMinimo = ProductoAEditar.StockMinimo,
-            PrecioCosto = ProductoAEditar.PrecioCosto,
-            PrecioVenta = ProductoAEditar.PrecioVenta,
-            RequiereCaducidad = ProductoAEditar.RequiereCaducidad,
+            Cantidad = ProductoAEditar.Cantidad,
+            Precio = ProductoAEditar.Precio,
+            FechaCaducidad = ProductoAEditar.FechaCaducidad,
             EsEdicion = true
         };
         _activo = ProductoAEditar.Activo;
@@ -210,7 +204,7 @@
 
     private async Task GuardarAsync()
     {
-        if (EsModoEdicion && string.IsNullOrWhiteSpace(_modelo.Codigo))
+        if (string.IsNullOrWhiteSpace(_modelo.Codigo))
         {
             _error = "El código es obligatorio.";
             return;
@@ -228,11 +222,10 @@
                     Codigo = _modelo.Codigo.Trim(),
                     Nombre = _modelo.Nombre.Trim(),
                     Descripcion = _modelo.Descripcion?.Trim(),
-                    UnidadMedida = _modelo.UnidadMedida.Trim(),
                     StockMinimo = _modelo.StockMinimo,
-                    PrecioCosto = _modelo.PrecioCosto,
-                    PrecioVenta = _modelo.PrecioVenta,
-                    RequiereCaducidad = _modelo.RequiereCaducidad,
+                    Cantidad = _modelo.Cantidad,
+                    Precio = _modelo.Precio,
+                    FechaCaducidad = _modelo.FechaCaducidad,
                     Activo = _activo
                 });
                 Toasts.Mostrar("Producto actualizado", "Los cambios se guardaron correctamente.", ToastTipo.Exito);
@@ -243,13 +236,13 @@
                 var creado = await Api.CrearAsync(new CreacionProductoDto
                 {
                     IdCategoria = _modelo.IdCategoria,
+                    Codigo = _modelo.Codigo.Trim(),
                     Nombre = _modelo.Nombre.Trim(),
                     Descripcion = _modelo.Descripcion?.Trim(),
-                    UnidadMedida = _modelo.UnidadMedida.Trim(),
                     StockMinimo = _modelo.StockMinimo,
-                    PrecioCosto = _modelo.PrecioCosto,
-                    PrecioVenta = _modelo.PrecioVenta,
-                    RequiereCaducidad = _modelo.RequiereCaducidad
+                    Cantidad = _modelo.Cantidad,
+                    Precio = _modelo.Precio,
+                    FechaCaducidad = _modelo.FechaCaducidad
                 });
                 Toasts.Mostrar("Producto creado", "El producto se agregó al inventario.", ToastTipo.Exito);
                 _modelo = new ProductoFormModel();
@@ -275,11 +268,11 @@
         try
         {
             var siguiente = await Api.ObtenerSiguienteCodigoAsync();
-            _codigoSugerido = siguiente.Codigo;
+            _modelo.Codigo = siguiente.Codigo;
         }
         catch (ApiException)
         {
-            _codigoSugerido = string.Empty;
+            _modelo.Codigo = string.Empty;
         }
     }
 }

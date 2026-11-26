@@ -46,6 +46,30 @@ public sealed class AuthApiService
             cancellationToken);
     }
 
+    /// <summary>
+    /// Avisa a la API del cierre de sesión para dejar la traza en la bitácora
+    /// de accesos. Es una operación de mejor esfuerzo: el cierre local de la
+    /// sesión nunca depende de que la API responda.
+    /// </summary>
+    public async Task CerrarSesionAsync(CancellationToken cancellationToken = default)
+    {
+        try
+        {
+            using var response = await _httpClient.PostAsync(
+                "auth/logout",
+                content: null,
+                cancellationToken);
+        }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
+            throw;
+        }
+        catch
+        {
+            // Sin conexión o token vencido: la sesión local se cierra igual.
+        }
+    }
+
     private async Task<T> PostAsync<T>(
         string ruta,
         object cuerpo,

@@ -5307,8 +5307,8 @@ select.form-control option {
 [data-theme="dark"] {
     color-scheme: dark;
     --bg: #081013;
-    --surface: #101c1f;
-    --surface-muted: #16262a;
+    --surface: #13252a;
+    --surface-muted: #1b3035;
     --sidebar: #071b1f;
     --sidebar-deep: #041114;
     --primary: #128a7f;
@@ -5994,4 +5994,1549 @@ select.form-control option {
 
 [data-theme="dark"] .permisos-page .permission-item.is-inactive {
     background: #1c1a15;
+}
+
+/* ==========================================================================
+   Buscador especifico (Pacientes, Odontologos, Expedientes)
+   Un solo control: selector de campo + texto, con el mismo borde y foco.
+   ========================================================================== */
+
+.visually-hidden {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    padding: 0;
+    margin: -1px;
+    overflow: hidden;
+    clip: rect(0, 0, 0, 0);
+    white-space: nowrap;
+    border: 0;
+}
+
+.usuarios-card__header--stack {
+    flex-direction: column;
+    align-items: stretch;
+}
+
+.usuarios-card__header-actions .buscador-especifico {
+    width: min(480px, 100%);
+}
+
+.buscador-especifico {
+    display: flex;
+    align-items: stretch;
+    width: 100%;
+    height: 40px;
+    overflow: hidden;
+    border: 1px solid var(--line-strong);
+    border-radius: 12px;
+    background: var(--surface);
+    transition: border-color var(--transition), box-shadow var(--transition);
+}
+
+.buscador-especifico:focus-within {
+    border-color: var(--primary);
+    box-shadow: 0 0 0 4px rgba(15, 118, 110, 0.12);
+}
+
+.buscador-especifico__campo {
+    display: flex;
+    flex: 0 0 auto;
+    border-right: 1px solid var(--line);
+    background: var(--surface-muted);
+}
+
+.buscador-especifico__select {
+    appearance: none;
+    height: 100%;
+    min-width: 146px;
+    padding: 0 34px 0 14px;
+    border: 0;
+    background: transparent url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%236b8488' stroke-width='2.2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'/%3E%3C/svg%3E") no-repeat right 11px center / 13px;
+    color: var(--text-strong);
+    font: inherit;
+    font-size: 12.5px;
+    font-weight: 650;
+    letter-spacing: 0.01em;
+    cursor: pointer;
+    outline: none;
+}
+
+.buscador-especifico__texto {
+    position: relative;
+    display: flex;
+    flex: 1 1 auto;
+    align-items: center;
+    min-width: 0;
+}
+
+.buscador-especifico__texto > .icon {
+    position: absolute;
+    left: 13px;
+    width: 15px;
+    height: 15px;
+    color: var(--muted);
+    pointer-events: none;
+}
+
+.buscador-especifico__texto input {
+    width: 100%;
+    height: 100%;
+    padding: 0 38px 0 38px;
+    border: 0;
+    background: transparent;
+    color: var(--text);
+    font: inherit;
+    font-size: 13px;
+    outline: none;
+}
+
+.buscador-especifico__texto input::placeholder {
+    color: var(--muted);
+    opacity: 0.85;
+}
+
+.buscador-especifico__texto .btn-clear-search {
+    position: absolute;
+    right: 8px;
+}
+
+@media (max-width: 700px) {
+    .usuarios-card__header-actions .buscador-especifico {
+        width: 100%;
+    }
+
+    .buscador-especifico__select {
+        min-width: 120px;
+    }
+}
+/* ==========================================================================
+   Boton informativo (Antecedentes, Horarios, Tratamientos, Ver detalle)
+   ========================================================================== */
+
+.btn-action--info {
+    color: #334e58;
+    background: #eef4f6;
+    border-color: rgba(51, 78, 88, 0.2);
+}
+
+.btn-action--info:hover,
+.btn-action--info.is-selected {
+    color: #ffffff;
+    background: #334e58;
+    border-color: #334e58;
+    transform: translateY(-1px);
+    box-shadow: 0 3px 8px rgba(51, 78, 88, 0.25);
+}
+
+.btn-action--info:active {
+    transform: translateY(0);
+}
+
+[data-theme="dark"] .btn-action--info {
+    color: #d7e6e9;
+    background: #17292d;
+    border-color: #2f4a50;
+}
+
+[data-theme="dark"] .btn-action--info:hover,
+[data-theme="dark"] .btn-action--info.is-selected {
+    color: #071b1f;
+    background: #d7e6e9;
+    border-color: #d7e6e9;
+}
+
+/* ==========================================================================
+   Modulo de expedientes
+   ========================================================================== */
+
+.expedientes-layout {
+    display: grid;
+    grid-template-columns: minmax(280px, 340px) minmax(0, 1fr);
+    gap: 22px;
+    align-items: start;
+}
+
+@media (max-width: 1100px) {
+    .expedientes-layout {
+        grid-template-columns: minmax(0, 1fr);
+    }
+}
+
+.expedientes-vacio {
+    margin: 0;
+    padding: 18px 24px;
+    color: var(--muted);
+    font-size: 12.5px;
+}
+
+.paciente-lista {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    max-height: 560px;
+    margin: 0;
+    padding: 12px;
+    overflow-y: auto;
+    list-style: none;
+}
+
+.paciente-item {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    width: 100%;
+    padding: 10px 12px;
+    border: 1px solid transparent;
+    border-radius: 12px;
+    background: transparent;
+    color: var(--text);
+    font: inherit;
+    text-align: left;
+    cursor: pointer;
+    transition: all var(--transition);
+}
+
+.paciente-item:hover {
+    background: var(--surface-muted);
+    border-color: var(--line);
+}
+
+.paciente-item.is-selected {
+    background: var(--primary-soft);
+    border-color: rgba(15, 118, 110, 0.3);
+}
+
+.paciente-item__copy {
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+}
+
+.paciente-item__copy strong {
+    font-size: 13px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.paciente-item__copy small {
+    color: var(--muted);
+    font-size: 11.5px;
+}
+
+.avatar--sm {
+    width: 32px;
+    height: 32px;
+    flex: 0 0 32px;
+    font-size: 11px;
+}
+
+.expediente-tabs {
+    display: flex;
+    gap: 6px;
+    padding: 14px 24px 0;
+    border-bottom: 1px solid var(--line);
+    overflow-x: auto;
+}
+
+.expediente-tab {
+    display: inline-flex;
+    align-items: center;
+    gap: 7px;
+    padding: 10px 14px;
+    border: none;
+    border-bottom: 2px solid transparent;
+    background: transparent;
+    color: var(--text-soft);
+    font: inherit;
+    font-size: 12.8px;
+    font-weight: 650;
+    cursor: pointer;
+    white-space: nowrap;
+}
+
+.expediente-tab .icon {
+    width: 15px;
+    height: 15px;
+}
+
+.expediente-tab.is-active {
+    color: var(--primary-strong);
+    border-bottom-color: var(--primary);
+}
+
+.expediente-cita {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 14px;
+    margin: 18px 24px 0;
+    padding: 14px 18px;
+    border: 1px solid rgba(15, 118, 110, 0.3);
+    border-left: 4px solid var(--primary);
+    border-radius: 14px;
+    background: var(--primary-soft);
+}
+
+.expediente-cita__estado {
+    padding: 4px 10px;
+    font-size: 11.5px;
+    font-weight: 700;
+    color: #6d28d9;
+    background: #f1e9ff;
+    border-radius: 999px;
+    white-space: nowrap;
+}
+
+.expediente-cita__estado.is-lista {
+    color: var(--success);
+    background: var(--success-soft);
+}
+
+.expediente-cita__datos {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    min-width: 0;
+    flex: 1 1 240px;
+}
+
+.expediente-cita__datos p {
+    margin: 0;
+    color: var(--text-soft);
+    font-size: 12.5px;
+}
+
+.expediente-cita__acciones {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+}
+
+.expediente-aviso {
+    margin: 18px 24px 0;
+    padding: 16px 18px;
+    border: 1px dashed var(--line-strong);
+    border-radius: 14px;
+    background: var(--surface-muted);
+}
+
+.expediente-aviso p {
+    margin: 4px 0 0;
+    color: var(--muted);
+    font-size: 12.5px;
+}
+
+.expediente-resumen {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 16px;
+    margin: 18px 24px 0;
+    padding: 16px 18px;
+    border: 1px solid var(--line);
+    border-radius: 14px;
+    background: var(--surface-muted);
+}
+
+.expediente-resumen__datos {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    min-width: 0;
+}
+
+.expediente-resumen__datos p {
+    margin: 0;
+    color: var(--text-soft);
+    font-size: 12.8px;
+}
+
+.expediente-seccion-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    margin: 22px 24px 10px;
+}
+
+.expediente-seccion-header h3,
+.atencion-detalle h4 {
+    margin: 0;
+    color: var(--text-strong);
+    font-size: 14px;
+    font-weight: 700;
+}
+
+.expediente-form {
+    margin: 12px 24px 0;
+    padding: 16px 18px;
+    border: 1px solid var(--line);
+    border-radius: 14px;
+    background: var(--surface);
+}
+
+.expediente-form__acciones {
+    display: flex;
+    justify-content: flex-end;
+    gap: 8px;
+    margin-top: 14px;
+}
+
+.atencion-card {
+    margin: 12px 24px 0;
+    padding: 14px 16px;
+    border: 1px solid var(--line);
+    border-radius: 14px;
+    background: var(--surface);
+}
+
+.atencion-card.is-expanded {
+    border-color: rgba(15, 118, 110, 0.3);
+}
+
+.atencion-card__cabecera {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 14px;
+    flex-wrap: wrap;
+}
+
+.atencion-card__datos {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    min-width: 0;
+}
+
+.atencion-detalle {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    margin-top: 14px;
+    padding-top: 14px;
+    border-top: 1px solid var(--line);
+}
+
+.atencion-detalle__titulo {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    flex-wrap: wrap;
+}
+
+.atencion-detalle__titulo h4 {
+    margin: 0;
+}
+
+.atencion-detalle__titulo .btn {
+    flex: 0 0 auto;
+}
+
+.medicamento-lista {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    margin: 0;
+    padding: 0;
+    list-style: none;
+}
+
+.medicamento-lista li {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    padding: 10px 12px;
+    border: 1px solid var(--line);
+    border-radius: 10px;
+    background: var(--surface-muted);
+}
+
+.expediente-fila-form > td {
+    padding: 0 12px 12px;
+    background: var(--surface-muted);
+}
+
+.expediente-fila-form .expediente-form {
+    margin: 0;
+}
+/* Listados de Pacientes y Odontologos: la lista ocupa todo el ancho para que
+   las acciones de cada fila sean visibles sin desplazamiento horizontal. */
+.usuarios-layout--stack {
+    grid-template-columns: minmax(0, 1fr);
+}
+
+.usuarios-table th {
+    white-space: nowrap;
+}
+
+.usuarios-table .badge {
+    white-space: nowrap;
+}
+/* ==========================================================================
+   Radio unico de controles (botones, inputs, selects, buscadores, menus)
+   ========================================================================== */
+
+.btn,
+.btn-action,
+.form-control,
+.buscador-especifico,
+.menu-acciones__disparador {
+    border-radius: var(--radius-md);
+}
+
+/* ==========================================================================
+   Contraste de tarjetas y campos en modo oscuro
+   ========================================================================== */
+
+[data-theme="dark"] .card,
+[data-theme="dark"] .usuarios-card,
+[data-theme="dark"] .table-card {
+    border-color: rgba(94, 234, 212, 0.16);
+    box-shadow: 0 0 0 1px rgba(94, 234, 212, 0.05), 0 18px 44px -26px rgba(45, 212, 191, 0.32);
+}
+
+[data-theme="dark"] .form-control,
+[data-theme="dark"] .buscador-especifico {
+    border-color: rgba(94, 234, 212, 0.2);
+    background-color: #0b171b;
+}
+
+[data-theme="dark"] .form-control:focus,
+[data-theme="dark"] .buscador-especifico:focus-within {
+    border-color: var(--primary-strong);
+    box-shadow: 0 0 0 4px rgba(94, 234, 212, 0.14);
+}
+
+[data-theme="dark"] .buscador-especifico__campo {
+    background: #132a2f;
+}
+
+/* ==========================================================================
+   Badge neutro para estados inactivos
+   ========================================================================== */
+
+.status-pill--muted {
+    color: var(--text-soft);
+    background: var(--surface-muted);
+    box-shadow: inset 0 0 0 1px var(--line-strong);
+}
+
+.status-pill--muted > span {
+    background: var(--muted);
+}
+
+/* ==========================================================================
+   Menu de acciones secundarias (tres puntos)
+   ========================================================================== */
+
+.menu-acciones {
+    position: relative;
+    display: inline-flex;
+}
+
+.menu-acciones__disparador {
+    display: grid;
+    place-items: center;
+    width: 30px;
+    height: 30px;
+    border: 1px solid var(--line-strong);
+    background: var(--surface);
+    color: var(--text-soft);
+    cursor: pointer;
+    transition: all var(--transition);
+}
+
+.menu-acciones__disparador .icon {
+    width: 16px;
+    height: 16px;
+}
+
+.menu-acciones__disparador:hover,
+.menu-acciones__disparador.is-open {
+    color: var(--primary-strong);
+    border-color: var(--primary);
+    background: var(--primary-soft);
+}
+
+.menu-acciones__fondo {
+    position: fixed;
+    inset: 0;
+    z-index: 920;
+}
+
+.menu-acciones__panel {
+    position: absolute;
+    top: calc(100% + 6px);
+    right: 0;
+    z-index: 930;
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    min-width: 186px;
+    padding: 6px;
+    border: 1px solid var(--line-strong);
+    border-radius: var(--radius-md);
+    background: var(--surface);
+    box-shadow: var(--shadow-md);
+    animation: menu-entrada 140ms ease;
+}
+
+.menu-acciones__item {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    width: 100%;
+    padding: 9px 10px;
+    border: 0;
+    border-radius: 9px;
+    background: transparent;
+    color: var(--text);
+    font: inherit;
+    font-size: 12.8px;
+    font-weight: 600;
+    text-align: left;
+    cursor: pointer;
+}
+
+.menu-acciones__item .icon {
+    width: 15px;
+    height: 15px;
+    color: var(--primary);
+}
+
+.menu-acciones__item:hover {
+    background: var(--primary-soft);
+    color: var(--primary-strong);
+}
+
+.table-wrapper--acciones {
+    overflow: visible;
+}
+
+.odontologos-listado {
+    overflow: visible;
+}
+
+@keyframes menu-entrada {
+    from { opacity: 0; transform: translateY(-4px); }
+    to { opacity: 1; transform: translateY(0); }
+}
+
+/* ==========================================================================
+   Panel lateral (drawer) para formularios
+   ========================================================================== */
+
+.drawer-backdrop {
+    position: fixed;
+    inset: 0;
+    z-index: 900;
+    background: rgba(4, 17, 20, 0.55);
+    backdrop-filter: blur(3px);
+    animation: drawer-fondo 180ms ease;
+}
+
+.drawer {
+    position: fixed;
+    top: 0;
+    right: 0;
+    bottom: 0;
+    z-index: 910;
+    display: flex;
+    flex-direction: column;
+    width: min(560px, 100vw);
+    background: var(--surface);
+    border-left: 1px solid var(--line-strong);
+    box-shadow: -24px 0 60px -30px rgba(0, 0, 0, 0.5);
+    animation: drawer-entrada 220ms cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+
+.drawer__header {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 16px;
+    padding: 22px 24px 18px;
+    border-bottom: 1px solid var(--line);
+}
+
+.drawer__titulo {
+    display: flex;
+    align-items: flex-start;
+    gap: 12px;
+    min-width: 0;
+}
+
+.drawer__titulo h2 {
+    margin: 0;
+    color: var(--text-strong);
+    font-size: 17px;
+    font-weight: 700;
+}
+
+.drawer__titulo p {
+    margin: 4px 0 0;
+    color: var(--muted);
+    font-size: 12.5px;
+    line-height: 1.5;
+}
+
+.drawer__icono {
+    display: grid;
+    place-items: center;
+    flex: 0 0 38px;
+    width: 38px;
+    height: 38px;
+    border-radius: var(--radius-md);
+    color: #ffffff;
+    background: linear-gradient(145deg, #0f766e, #1aa99c);
+    box-shadow: 0 12px 22px -14px rgba(15, 118, 110, 0.8);
+}
+
+.drawer__cerrar {
+    display: grid;
+    place-items: center;
+    flex: 0 0 34px;
+    width: 34px;
+    height: 34px;
+    border: 1px solid var(--line);
+    border-radius: var(--radius-md);
+    background: var(--surface-muted);
+    color: var(--text-soft);
+    cursor: pointer;
+    transition: all var(--transition);
+}
+
+.drawer__cerrar:hover {
+    color: var(--text-strong);
+    border-color: var(--line-strong);
+}
+
+.drawer__cuerpo {
+    flex: 1;
+    min-height: 0;
+    overflow-y: auto;
+    padding-bottom: 24px;
+}
+
+.drawer .usuarios-card {
+    border: 0;
+    border-radius: 0;
+    background: transparent;
+    box-shadow: none;
+    overflow: visible;
+}
+
+@keyframes drawer-entrada {
+    from { transform: translateX(28px); opacity: 0; }
+    to { transform: translateX(0); opacity: 1; }
+}
+
+@keyframes drawer-fondo {
+    from { opacity: 0; }
+    to { opacity: 1; }
+}
+
+@media (max-width: 640px) {
+    .drawer__header {
+        padding: 18px;
+    }
+}
+/* Los menus de acciones deben poder salir de la tabla (vence la regla general de .usuarios-card .table-wrapper). */
+.usuarios-card .table-wrapper.table-wrapper--acciones {
+    overflow: visible;
+}
+
+.usuarios-card__header-actions .btn {
+    flex: 0 0 auto;
+    white-space: nowrap;
+}
+/* ==========================================================================
+   Inicio: hero full-bleed y accesos rapidos
+   ========================================================================== */
+
+.inicio-hero {
+    position: relative;
+    isolation: isolate;
+    display: flex;
+    align-items: center;
+    min-height: 380px;
+    margin-bottom: 26px;
+    padding: 46px 48px;
+    overflow: hidden;
+    border-radius: var(--radius-xl);
+    color: #eafaf7;
+    background: #0b191c;
+    box-shadow: var(--shadow-md);
+}
+
+.inicio-hero__imagen {
+    position: absolute;
+    inset: 0;
+    z-index: 0;
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    object-position: right center;
+}
+
+.inicio-hero__overlay {
+    position: absolute;
+    inset: 0;
+    z-index: 1;
+    background: linear-gradient(
+        90deg,
+        rgba(11, 25, 28, 0.96) 0%,
+        rgba(13, 38, 42, 0.88) 42%,
+        rgba(13, 38, 42, 0.25) 75%,
+        rgba(13, 38, 42, 0.05) 100%
+    );
+    pointer-events: none;
+}
+
+.inicio-hero__copy {
+    position: relative;
+    z-index: 2;
+    max-width: 560px;
+    text-shadow: 0 1px 10px rgba(2, 18, 22, 0.45);
+}
+
+.inicio-hero__badge {
+    display: inline-flex;
+    align-items: center;
+    padding: 5px 12px;
+    border: 1px solid rgba(94, 234, 212, 0.35);
+    border-radius: 999px;
+    background: rgba(94, 234, 212, 0.14);
+    color: #a7f3e9;
+    font-size: 10.5px;
+    font-weight: 700;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+}
+
+.inicio-hero h2 {
+    margin: 14px 0 0;
+    color: #ffffff;
+    font-size: clamp(24px, 3vw, 33px);
+    font-weight: 750;
+    line-height: 1.15;
+}
+
+.inicio-hero p {
+    margin: 10px 0 0;
+    color: #d5ebe8;
+    font-size: 13.8px;
+    line-height: 1.6;
+}
+
+.inicio-hero__acciones {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 12px;
+    margin-top: 26px;
+}
+
+.inicio-hero__acciones .button {
+    min-height: 44px;
+    padding: 0 18px;
+    text-shadow: none;
+}
+
+.inicio-hero__acciones .button--primary {
+    color: #042521;
+    background: #14b8a6;
+    box-shadow: 0 16px 32px -18px rgba(20, 184, 166, 0.9);
+}
+
+.inicio-hero__acciones .button--primary:hover:not(:disabled) {
+    background: #10a99a;
+    box-shadow: 0 20px 34px -18px rgba(20, 184, 166, 0.95);
+}
+
+.inicio-hero__acciones .button--secondary {
+    color: #eafaf7;
+    border: 1px solid rgba(255, 255, 255, 0.38);
+    background: rgba(255, 255, 255, 0.1);
+    backdrop-filter: blur(10px);
+    -webkit-backdrop-filter: blur(10px);
+}
+
+.inicio-hero__acciones .button--secondary:hover {
+    background: rgba(255, 255, 255, 0.18);
+    border-color: rgba(255, 255, 255, 0.55);
+}
+
+/* Accesos rapidos: cuatro tarjetas compactas bajo el hero. */
+
+.inicio-accesos {
+    margin-bottom: 8px;
+}
+
+.inicio-accesos__header {
+    margin-bottom: 14px;
+}
+
+.inicio-accesos__header h2 {
+    margin: 0;
+    color: var(--text-strong);
+    font-size: 16px;
+    font-weight: 720;
+    letter-spacing: -0.02em;
+}
+
+.inicio-accesos__header p {
+    margin: 4px 0 0;
+    color: var(--muted);
+    font-size: 12px;
+    line-height: 1.5;
+}
+
+.inicio-accesos__grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(230px, 1fr));
+    gap: 14px;
+}
+
+.acceso-rapido {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    padding: 16px 18px;
+    border: 1px solid var(--line);
+    border-radius: var(--radius-lg);
+    background: var(--surface);
+    box-shadow: var(--shadow-sm);
+    color: inherit;
+    text-decoration: none;
+    transition:
+        transform var(--transition),
+        border-color var(--transition),
+        box-shadow var(--transition),
+        background-color var(--transition);
+}
+
+.acceso-rapido:hover {
+    transform: translateY(-2px);
+    border-color: rgba(20, 184, 166, 0.5);
+    box-shadow: var(--shadow-md);
+}
+
+.acceso-rapido:focus-visible {
+    outline: 2px solid var(--accent);
+    outline-offset: 2px;
+    border-color: rgba(20, 184, 166, 0.5);
+}
+
+.acceso-rapido__icon {
+    display: grid;
+    place-items: center;
+    flex: 0 0 auto;
+    width: 42px;
+    height: 42px;
+    border-radius: 12px;
+    background: var(--primary-soft);
+    color: var(--primary-strong);
+}
+
+.acceso-rapido__icon .icon {
+    width: 19px;
+    height: 19px;
+}
+
+.acceso-rapido__copy {
+    display: flex;
+    flex: 1 1 auto;
+    flex-direction: column;
+    gap: 2px;
+    min-width: 0;
+}
+
+.acceso-rapido__copy strong {
+    color: var(--text-strong);
+    font-size: 13.2px;
+    font-weight: 700;
+    letter-spacing: -0.01em;
+}
+
+.acceso-rapido__copy small {
+    color: var(--muted);
+    font-size: 11.6px;
+    line-height: 1.45;
+}
+
+.acceso-rapido__flecha {
+    flex: 0 0 auto;
+    width: 15px;
+    height: 15px;
+    color: var(--muted);
+    transition: transform var(--transition), color var(--transition);
+}
+
+.acceso-rapido:hover .acceso-rapido__flecha {
+    color: var(--primary);
+    transform: translateX(2px);
+}
+
+[data-theme="dark"] .acceso-rapido {
+    border-color: rgba(94, 234, 212, 0.16);
+}
+
+[data-theme="dark"] .acceso-rapido:hover {
+    border-color: rgba(94, 234, 212, 0.45);
+}
+
+@media (max-width: 900px) {
+    .inicio-hero {
+        min-height: 340px;
+        padding: 34px 30px;
+    }
+
+    .inicio-hero__copy {
+        max-width: 480px;
+    }
+}
+
+@media (max-width: 640px) {
+    .inicio-hero {
+        min-height: 300px;
+        padding: 26px 20px;
+    }
+
+    .inicio-hero__imagen {
+        object-position: 78% center;
+    }
+
+    /* En movil el texto ocupa casi todo el ancho: se refuerza el degradado
+       para conservar el contraste AA sobre la zona clara de la imagen. */
+    .inicio-hero__overlay {
+        background: linear-gradient(
+            90deg,
+            rgba(11, 25, 28, 0.96) 0%,
+            rgba(13, 38, 42, 0.9) 62%,
+            rgba(13, 38, 42, 0.62) 100%
+        );
+    }
+
+    .inicio-hero__acciones {
+        gap: 10px;
+        margin-top: 20px;
+    }
+
+    .inicio-hero__acciones .button {
+        flex: 1 1 100%;
+    }
+}
+/* ==========================================================================
+   Bitacoras: auditoria y trazabilidad
+   ========================================================================== */
+
+.bitacoras-page .page-heading {
+    align-items: flex-end;
+}
+
+.bitacoras-tabs {
+    display: flex;
+    gap: 6px;
+    width: fit-content;
+    max-width: 100%;
+    margin-bottom: 20px;
+    padding: 5px;
+    overflow-x: auto;
+    border: 1px solid var(--line);
+    border-radius: 999px;
+    background: var(--surface-muted);
+}
+
+.bitacoras-tab {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    min-height: 38px;
+    padding: 0 16px;
+    border: 0;
+    border-radius: 999px;
+    background: transparent;
+    color: var(--muted);
+    font: inherit;
+    font-size: 12.5px;
+    font-weight: 680;
+    white-space: nowrap;
+    cursor: pointer;
+    transition:
+        color var(--transition),
+        background-color var(--transition),
+        box-shadow var(--transition);
+}
+
+.bitacoras-tab .icon {
+    width: 16px;
+    height: 16px;
+}
+
+.bitacoras-tab:hover {
+    color: var(--text-strong);
+    background: rgba(15, 118, 110, 0.08);
+}
+
+.bitacoras-tab:focus-visible {
+    outline: 2px solid var(--accent);
+    outline-offset: 2px;
+}
+
+.bitacoras-tab.is-active {
+    color: #ffffff;
+    background: linear-gradient(135deg, var(--primary) 0%, #129589 100%);
+    box-shadow: 0 12px 24px -18px rgba(15, 118, 110, 0.95);
+}
+
+.bitacoras-tab__count {
+    display: inline-flex;
+    min-width: 24px;
+    align-items: center;
+    justify-content: center;
+    padding: 1px 7px;
+    border-radius: 999px;
+    background: rgba(112, 133, 139, 0.16);
+    color: inherit;
+    font-size: 10.5px;
+    font-weight: 750;
+}
+
+.bitacoras-tab.is-active .bitacoras-tab__count {
+    background: rgba(255, 255, 255, 0.22);
+    color: #ffffff;
+}
+
+[data-theme="dark"] .bitacoras-tabs {
+    border-color: rgba(94, 234, 212, 0.16);
+}
+
+[data-theme="dark"] .bitacoras-tab:hover {
+    background: rgba(94, 234, 212, 0.1);
+}
+
+.bitacoras-stats {
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 14px;
+    margin-bottom: 20px;
+}
+
+.bitacora-stat {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    padding: 16px 18px;
+    border: 1px solid var(--line);
+    border-radius: var(--radius-lg);
+    background: var(--surface);
+    box-shadow: var(--shadow-sm);
+}
+
+.bitacora-stat__label {
+    color: var(--muted);
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+}
+
+.bitacora-stat strong {
+    color: var(--text-strong);
+    font-size: 26px;
+    font-weight: 750;
+    line-height: 1.1;
+}
+
+.bitacora-stat__hint {
+    color: var(--muted);
+    font-size: 11.5px;
+}
+
+.bitacora-stat--ok {
+    border-color: rgba(74, 222, 128, 0.28);
+}
+
+.bitacora-stat--ok strong {
+    color: var(--success);
+}
+
+.bitacora-stat--error {
+    border-color: rgba(248, 113, 113, 0.3);
+}
+
+.bitacora-stat--error strong {
+    color: var(--danger);
+}
+
+.bitacora-stat--warn {
+    border-color: rgba(251, 191, 36, 0.3);
+}
+
+.bitacora-stat--warn strong {
+    color: var(--warning);
+}
+
+.bitacora-stat--ip {
+    border-color: rgba(20, 184, 166, 0.3);
+}
+
+.bitacora-stat--ip strong {
+    color: var(--primary);
+}
+
+[data-theme="dark"] .bitacora-stat--ip strong {
+    color: #5eead4;
+}
+
+.bitacoras-card {
+    padding-bottom: 4px;
+}
+
+.bitacoras-filtros {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: flex-end;
+    gap: 12px;
+    padding: 16px 22px;
+    border-bottom: 1px solid var(--line);
+    background: var(--surface-muted);
+}
+
+.bitacoras-campo {
+    display: flex;
+    flex: 1 1 165px;
+    min-width: 165px;
+    flex-direction: column;
+    gap: 5px;
+}
+
+.bitacoras-campo > span {
+    color: var(--muted);
+    font-size: 10.5px;
+    font-weight: 700;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+}
+
+.bitacoras-campo--texto {
+    flex: 2 1 240px;
+    min-width: 240px;
+}
+
+.bitacoras-buscador {
+    position: relative;
+    display: flex;
+    align-items: center;
+}
+
+.bitacoras-buscador .icon {
+    position: absolute;
+    left: 11px;
+    width: 15px;
+    height: 15px;
+    color: var(--muted);
+    pointer-events: none;
+}
+
+.bitacoras-buscador input {
+    width: 100%;
+    height: 40px;
+    padding: 0 12px 0 34px;
+    border: 1px solid var(--line-strong);
+    border-radius: var(--radius-md);
+    background: var(--surface);
+    color: var(--text);
+    font: inherit;
+    font-size: 13px;
+}
+
+.bitacoras-buscador input:focus {
+    outline: none;
+    border-color: var(--primary);
+    box-shadow: 0 0 0 4px rgba(15, 118, 110, 0.1);
+}
+
+.bitacoras-filtros__acciones {
+    display: flex;
+    gap: 8px;
+    margin-left: auto;
+}
+
+.bitacoras-table {
+    min-width: 1040px;
+}
+
+.bitacoras-table .col-fecha {
+    width: 13%;
+    white-space: nowrap;
+}
+
+.bitacoras-table .col-resultado {
+    width: 11%;
+}
+
+.bitacoras-table .col-detalle {
+    width: 26%;
+}
+
+.accesos-table {
+    min-width: 940px;
+}
+
+.accesos-table .col-ip {
+    width: 16%;
+    white-space: nowrap;
+}
+
+.acceso-ip {
+    display: inline-flex;
+    align-items: center;
+    padding: 3px 9px;
+    border: 1px solid var(--line-strong);
+    border-radius: 999px;
+    background: var(--surface-muted);
+    color: var(--text-strong);
+    font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+    font-size: 11.5px;
+    letter-spacing: 0.01em;
+}
+
+[data-theme="dark"] .acceso-ip {
+    border-color: rgba(94, 234, 212, 0.22);
+    background: rgba(94, 234, 212, 0.08);
+    color: #a7f3e9;
+}
+
+.bitacora-fecha {
+    display: block;
+    color: var(--text-strong);
+    font-size: 12.8px;
+    font-weight: 650;
+}
+
+.bitacora-detalle-celda {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+}
+
+.bitacora-detalle-celda > span {
+    overflow: hidden;
+    color: var(--text-soft);
+    font-size: 12.4px;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.bitacora-detalle dl {
+    display: grid;
+    grid-template-columns: 150px minmax(0, 1fr);
+    gap: 10px 16px;
+    margin: 0;
+    padding: 20px 24px;
+}
+
+.bitacora-detalle dt {
+    color: var(--muted);
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: 0.05em;
+    text-transform: uppercase;
+}
+
+.bitacora-detalle dd {
+    margin: 0;
+    color: var(--text);
+    font-size: 13px;
+    line-height: 1.5;
+    overflow-wrap: anywhere;
+}
+
+@media (max-width: 1100px) {
+    .bitacoras-stats {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+}
+
+@media (max-width: 700px) {
+    .bitacoras-tabs {
+        width: 100%;
+    }
+
+    .bitacoras-tab {
+        flex: 1 1 auto;
+        justify-content: center;
+        padding: 0 10px;
+        font-size: 11.5px;
+    }
+
+    .bitacoras-stats {
+        grid-template-columns: minmax(0, 1fr);
+    }
+
+    .bitacoras-filtros__acciones {
+        margin-left: 0;
+        width: 100%;
+    }
+
+    .bitacora-detalle dl {
+        grid-template-columns: minmax(0, 1fr);
+    }
+}
+
+/* ==========================================================================
+   Ajustes de legibilidad: selectores amplios y buscador principal
+   ========================================================================== */
+
+/* Los desplegables del panel lateral necesitan altura y ancho suficientes
+   para mostrar completas las descripciones (especialidad, usuario, etc.). */
+.drawer select.form-control {
+    height: 46px;
+    padding-right: 42px;
+    background-position: right 14px center;
+    background-size: 16px;
+    font-size: 13.2px;
+}
+
+/* Buscador de los listados: mas ancho y alto para leer el campo y el ejemplo. */
+.usuarios-card__header-actions .buscador-especifico {
+    flex: 0 1 560px;
+    width: 560px;
+    max-width: 100%;
+    height: 44px;
+}
+
+.buscador-especifico__select {
+    min-width: 180px;
+    padding: 0 38px 0 15px;
+    font-size: 13px;
+}
+
+.buscador-especifico__texto input {
+    padding: 0 40px;
+    font-size: 13.5px;
+}
+
+/* En ventanas medianas el encabezado baja el buscador a su propia linea
+   para no comprimir el selector ni el texto de ayuda. */
+@media (max-width: 1180px) {
+    .usuarios-card__header {
+        flex-wrap: wrap;
+    }
+
+    .usuarios-card__header-actions {
+        width: 100%;
+        flex-wrap: wrap;
+        justify-content: flex-end;
+    }
+
+    .usuarios-card__header-actions .buscador-especifico {
+        flex: 1 1 320px;
+        width: auto;
+        max-width: 560px;
+    }
+}
+
+/* Horarios: los selectores de hora tambien se agrandan para leerse mejor. */
+.agenda-editor__times .form-control {
+    height: 40px;
+    padding: 0 10px;
+    font-size: 13px;
+}
+
+.agenda-editor__times select.form-control {
+    padding-right: 30px;
+    background-position: right 10px center;
+    background-size: 15px;
+}
+
+/* ==========================================================================
+   Expedientes: buscador del panel angosto
+   El selector de criterio y el texto se apilan en dos filas para que ambos
+   se lean completos; el resto de listados mantiene el buscador en una linea.
+   ========================================================================== */
+
+.usuarios-card__header--stack .buscador-especifico {
+    flex: 0 0 auto;
+    flex-direction: column;
+    width: 100%;
+    height: auto;
+    overflow: hidden;
+}
+
+.usuarios-card__header--stack .buscador-especifico__campo {
+    border-right: 0;
+    border-bottom: 1px solid var(--line);
+}
+
+.usuarios-card__header--stack .buscador-especifico__select {
+    width: 100%;
+    height: 42px;
+    min-width: 0;
+    padding: 0 40px 0 14px;
+    color: var(--text-strong);
+    background-color: transparent;
+    font-size: 13px;
+}
+
+.usuarios-card__header--stack .buscador-especifico__texto {
+    flex: 0 0 auto;
+    min-height: 44px;
+}
+
+.usuarios-card__header--stack .buscador-especifico__texto input {
+    height: 44px;
+}
+/* ==========================================================================
+   Piezas compartidas: Citas e Inventario
+   ========================================================================== */
+
+.button--ghost {
+    color: var(--text-soft);
+    border: 1px solid var(--line-strong);
+    background: transparent;
+}
+
+.button--ghost:hover:not(:disabled) {
+    color: var(--primary-strong);
+    background: var(--primary-soft);
+}
+
+.field--span-2 {
+    grid-column: span 2;
+}
+
+.status-dot--active {
+    background: var(--success);
+}
+
+.status-dot--inactive {
+    background: var(--muted);
+}
+
+.search-icon {
+    flex: 0 0 auto;
+    width: 16px;
+    height: 16px;
+    color: var(--muted);
+}
+
+.table-actions-cell {
+    white-space: nowrap;
+}
+
+[data-theme="dark"] .button--ghost {
+    color: #d5ebe8;
+    border-color: rgba(94, 234, 212, 0.24);
+}
+
+[data-theme="dark"] .button--ghost:hover:not(:disabled) {
+    color: #a7f3e9;
+    background: rgba(94, 234, 212, 0.1);
 }

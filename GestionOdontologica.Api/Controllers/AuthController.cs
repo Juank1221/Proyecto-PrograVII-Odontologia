@@ -1,3 +1,6 @@
+using System.Globalization;
+using System.Net;
+using System.Security.Claims;
 using GestionOdontologica.Api.Data;
 using GestionOdontologica.Api.DTOs;
 using GestionOdontologica.Api.Notifications;
@@ -15,7 +18,6 @@ namespace GestionOdontologica.Api.Controllers;
 [ApiController]
 [Route("api/auth")]
 [Produces("application/json")]
-[AllowAnonymous]
 public sealed class AuthController : ControllerBase
 {
     private const int HorasSesion = 8;
@@ -24,6 +26,7 @@ public sealed class AuthController : ControllerBase
 
     private readonly IAuthRepository _authRepository;
     private readonly IPermisoRepository _permisoRepository;
+    private readonly IBitacoraRepository _bitacoraRepository;
     private readonly ISesionTokenService _tokenService;
     private readonly IEmailSender _emailSender;
     private readonly IWebHostEnvironment _environment;
@@ -32,6 +35,7 @@ public sealed class AuthController : ControllerBase
     public AuthController(
         IAuthRepository authRepository,
         IPermisoRepository permisoRepository,
+        IBitacoraRepository bitacoraRepository,
         ISesionTokenService tokenService,
         IEmailSender emailSender,
         IWebHostEnvironment environment,
@@ -39,6 +43,7 @@ public sealed class AuthController : ControllerBase
     {
         _authRepository = authRepository;
         _permisoRepository = permisoRepository;
+        _bitacoraRepository = bitacoraRepository;
         _tokenService = tokenService;
         _emailSender = emailSender;
         _environment = environment;
@@ -49,6 +54,7 @@ public sealed class AuthController : ControllerBase
     /// Valida las credenciales y devuelve los datos públicos del usuario.
     /// 401 credenciales incorrectas, 403 cuenta desactivada y 423 bloqueo temporal.
     /// </summary>
+    [AllowAnonymous]
     [HttpPost("login")]
     [ProducesResponseType(typeof(LoginResponseDto), StatusCodes.Status200OK)]
     [ProducesResponseType(typeof(ValidationProblemDetails), StatusCodes.Status400BadRequest)]
@@ -65,9 +71,19 @@ public sealed class AuthController : ControllerBase
             dto.Password,
             cancellationToken);
 
+        var direccionIp = ObtenerDireccionIp();
+
         switch (resultado.Estado)
         {
             case EstadoInicioSesion.Exitoso when resultado.Usuario is { } usuario:
+                await RegistrarAccesoAsync(
+                    usuario.IdUsuario,
+                    "LOGIN",
+                    "EXITO",
+                    direccionIp,
+                    "Inicio de sesión correcto",
+                    cancellationToken);
+
                 _logger.LogInformation(
                     "Inicio de sesión exitoso para el usuario {NombreUsuario}.",
                     usuario.NombreUsuario);
@@ -97,12 +113,28 @@ public sealed class AuthController : ControllerBase
                 });
 
             case EstadoInicioSesion.CuentaInactiva:
+                await RegistrarAccesoAsync(
+                    resultado.IdUsuario,
+                    "LOGIN",
+                    "ERROR",
+                    direccionIp,
+                    "Intento de acceso a una cuenta desactivada",
+                    cancellationToken);
+
                 return Problem(
                     statusCode: StatusCodes.Status403Forbidden,
                     title: "Cuenta desactivada",
                     detail: "Tu cuenta está desactivada. Contacta con el administrador del sistema.");
 
             case EstadoInicioSesion.CuentaBloqueada:
+                await RegistrarAccesoAsync(
+                    resultado.IdUsuario,
+                    "LOGIN",
+                    "ERROR",
+                    direccionIp,
+                    "Intento de acceso a una cuenta bloqueada temporalmente",
+                    cancellationToken);
+
                 // SEGUNDOS_BLOQUEO es un valor redondeado hacia arriba por Oracle;
                 // se redondea al minuto más cercano para no mostrar 16 minutos
                 // en un bloqueo de 15.
@@ -118,6 +150,14 @@ public sealed class AuthController : ControllerBase
                     detail: $"La cuenta está bloqueada por intentos fallidos. Inténtalo de nuevo en {minutos} minuto{(minutos == 1 ? string.Empty : "s")} o restablece tu contraseña.");
 
             default:
+                await RegistrarAccesoAsync(
+                    resultado.IdUsuario,
+                    "LOGIN",
+                    "ERROR",
+                    direccionIp,
+                    "Intento de inicio de sesión con credenciales inválidas",
+                    cancellationToken);
+
                 return Problem(
                     statusCode: StatusCodes.Status401Unauthorized,
                     title: "Credenciales incorrectas",
@@ -126,10 +166,36 @@ public sealed class AuthController : ControllerBase
     }
 
     /// <summary>
+    /// Registra el cierre de sesión del usuario autenticado. El token es
+    /// stateless; este endpoint solo deja la traza de auditoría con la IP.
+    /// </summary>
+    [Authorize]
+    [HttpPost("logout")]
+    [ProducesResponseType(StatusCodes.Status204NoContent)]
+    public async Task<IActionResult> CerrarSesion(CancellationToken cancellationToken)
+    {
+        var idClaim = User.FindFirstValue(ClaimTypes.NameIdentifier);
+
+        if (int.TryParse(idClaim, NumberStyles.Integer, CultureInfo.InvariantCulture, out var idUsuario))
+        {
+            await RegistrarAccesoAsync(
+                idUsuario,
+                "LOGOUT",
+                "EXITO",
+                ObtenerDireccionIp(),
+                "Cierre de sesión",
+                cancellationToken);
+        }
+
+        return NoContent();
+    }
+
+    /// <summary>
     /// Genera un token de recuperación. La respuesta es siempre la misma para
     /// no revelar si el correo existe. En Development se incluye el token para
     /// poder completar el flujo sin un servidor de correo.
     /// </summary>
+    [AllowAnonymous]
     [HttpPost("recuperar-password")]
     [ProducesResponseType(typeof(RecuperarPasswordResponseDto), StatusCodes.Status200OK)]
     [ProducesResponseType(typeof(ValidationProblemDetails), StatusCodes.Status400BadRequest)]
@@ -186,6 +252,7 @@ public sealed class AuthController : ControllerBase
     /// <summary>
     /// Restablece la contraseña con un token vigente y de un solo uso.
     /// </summary>
+    [AllowAnonymous]
     [HttpPost("restablecer-password")]
     [ProducesResponseType(typeof(MensajeResponseDto), StatusCodes.Status200OK)]
     [ProducesResponseType(typeof(ValidationProblemDetails), StatusCodes.Status400BadRequest)]
@@ -215,5 +282,69 @@ public sealed class AuthController : ControllerBase
         {
             Mensaje = "Tu contraseña se actualizó correctamente. Ya puedes iniciar sesión."
         });
+    }
+
+    private async Task RegistrarAccesoAsync(
+        int? idUsuario,
+        string accion,
+        string resultado,
+        string? direccionIp,
+        string detalle,
+        CancellationToken cancellationToken)
+    {
+        try
+        {
+            await _bitacoraRepository.RegistrarAccesoAsync(
+                idUsuario,
+                accion,
+                resultado,
+                direccionIp,
+                detalle,
+                cancellationToken);
+        }
+        catch (Exception ex)
+        {
+            // La bitácora es complementaria: un fallo de auditoría no debe
+            // impedir el inicio ni el cierre de sesión.
+            _logger.LogWarning(ex, "No se pudo registrar el evento {Accion} en la bitácora.", accion);
+        }
+    }
+
+    /// <summary>
+    /// Obtiene la IP de origen normalizada. Respeta X-Forwarded-For cuando la
+    /// API está detrás de un proxy y convierte direcciones IPv4 mapeadas en IPv6
+    /// a su forma IPv4 legible.
+    /// </summary>
+    private string? ObtenerDireccionIp()
+    {
+        var reenviada = Request.Headers["X-Forwarded-For"].FirstOrDefault();
+        var valor = !string.IsNullOrWhiteSpace(reenviada)
+            ? reenviada.Split(',').FirstOrDefault()
+            : HttpContext.Connection.RemoteIpAddress?.ToString();
+
+        if (string.IsNullOrWhiteSpace(valor))
+        {
+            return null;
+        }
+
+        valor = valor.Trim();
+
+        if (IPAddress.TryParse(valor, out var direccion))
+        {
+            if (direccion.IsIPv4MappedToIPv6)
+            {
+                direccion = direccion.MapToIPv4();
+            }
+
+            valor = direccion.ToString();
+        }
+
+        var zona = valor.IndexOf('%');
+        if (zona >= 0)
+        {
+            valor = valor[..zona];
+        }
+
+        return valor.Length > 45 ? valor[..45] : valor;
     }
 }

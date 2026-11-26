@@ -10,6 +10,7 @@ public sealed class CreacionOdontologoVinculadoDto
     public int? IdUsuario { get; set; }
 
     [StringLength(150)]
+    [NombrePersona]
     public string? NombreCompleto { get; set; }
 
     [StringLength(50)]
@@ -29,10 +30,12 @@ public sealed class CreacionOdontologoVinculadoDto
 
     [Required(ErrorMessage = "Los nombres son obligatorios.")]
     [StringLength(100)]
+    [NombrePersona]
     public string Nombres { get; set; } = string.Empty;
 
     [Required(ErrorMessage = "Los apellidos son obligatorios.")]
     [StringLength(100)]
+    [NombrePersona]
     public string Apellidos { get; set; } = string.Empty;
 
     [Required(ErrorMessage = "El número de colegiado es obligatorio.")]
