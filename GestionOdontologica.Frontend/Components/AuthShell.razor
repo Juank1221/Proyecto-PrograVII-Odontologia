@@ -1,0 +1,102 @@
+@if (!string.IsNullOrWhiteSpace(TituloPagina))
+{
+    <PageTitle>@TituloPagina</PageTitle>
+}
+
+<div class="auth-page">
+    <ThemeToggle ClaseAdicional="theme-toggle--floating" />
+
+    <div class="auth-shell">
+        <aside class="auth-aside" aria-label="Presentación de OdontoCare">
+            <div class="auth-brand">
+                <div class="brand-mark" aria-hidden="true">
+                    <svg class="icon brand-mark__icon"><use href="#icon-tooth"></use></svg>
+                </div>
+                <div class="brand-copy">
+                    <span class="brand-name">OdontoCare</span>
+                    <span class="brand-subtitle">Clínica dental</span>
+                </div>
+            </div>
+
+            <div class="auth-aside__content">
+                <span class="auth-eyebrow">@Etiqueta</span>
+                <h1>@Titulo</h1>
+                <p>@Descripcion</p>
+
+                @if (AsideContent is not null)
+                {
+                    @AsideContent
+                }
+                else
+                {
+                    <ul class="auth-benefits">
+                        <li>
+                            <span class="auth-benefit__icon" aria-hidden="true">
+                                <svg class="icon"><use href="#icon-shield-check"></use></svg>
+                            </span>
+                            <div>
+                                <strong>Acceso controlado</strong>
+                                <span>Cada usuario entra con sus propias credenciales.</span>
+                            </div>
+                        </li>
+                        <li>
+                            <span class="auth-benefit__icon" aria-hidden="true">
+                                <svg class="icon"><use href="#icon-users"></use></svg>
+                            </span>
+                            <div>
+                                <strong>Equipo conectado</strong>
+                                <span>Administra odontólogos, recepción y administración.</span>
+                            </div>
+                        </li>
+                        <li>
+                            <span class="auth-benefit__icon" aria-hidden="true">
+                                <svg class="icon"><use href="#icon-clock"></use></svg>
+                            </span>
+                            <div>
+                                <strong>Sesiones con vigencia</strong>
+                                <span>Tu acceso se cierra automáticamente al expirar.</span>
+                            </div>
+                        </li>
+                    </ul>
+                }
+            </div>
+
+            <div class="auth-aside__footer">
+                <span class="auth-secure">
+                    <svg class="icon"><use href="#icon-lock"></use></svg>
+                    @PiePagina
+                </span>
+            </div>
+        </aside>
+
+        <section class="auth-form-panel" aria-labelledby="@IdTitulo">
+            @ChildContent
+        </section>
+    </div>
+</div>
+
+@code {
+    [Parameter]
+    public string? TituloPagina { get; set; }
+
+    [Parameter]
+    public string IdTitulo { get; set; } = "auth-title";
+
+    [Parameter]
+    public string Etiqueta { get; set; } = "Acceso seguro";
+
+    [Parameter]
+    public string Titulo { get; set; } = string.Empty;
+
+    [Parameter]
+    public string Descripcion { get; set; } = string.Empty;
+
+    [Parameter]
+    public string PiePagina { get; set; } = "Validación de credenciales en el servidor";
+
+    [Parameter]
+    public RenderFragment? AsideContent { get; set; }
+
+    [Parameter, EditorRequired]
+    public RenderFragment ChildContent { get; set; } = default!;
+}

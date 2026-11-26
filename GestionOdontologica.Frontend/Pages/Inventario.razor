@@ -1,0 +1,189 @@
+﻿@page "/inventario"
+@attribute [Authorize(Policy = PermisoCodigos.InventarioVer)]
+@implements IDisposable
+@inject ProductosApiService Api
+@inject ToastService Toasts
+@inject ApiStatusService ApiStatus
+@inject SesionService Sesion
+
+<PageTitle>Inventario | OdontoCare</PageTitle>
+
+<div class="page">
+    <section class="page-heading" aria-labelledby="page-title">
+        <div class="page-heading__copy">
+            <h1 id="page-title">Inventario</h1>
+            <p>Administra los productos e insumos necesarios para la atención odontológica.</p>
+        </div>
+        <div class="heading-meta" aria-label="Resumen">
+            <div class="meta-card"><span>Total productos</span><strong>@ConteoTotal</strong></div>
+            <div class="meta-card"><span>Activos</span><strong class="text-success">@ConteoActivos</strong></div>
+            <div class="meta-card"><span>Estado API</span><strong class="meta-status @ApiStatus.ClaseCss"><span class="api-dot"></span><span>@ApiStatus.TextoMeta</span></strong></div>
+        </div>
+    </section>
+
+    <div class="workspace-grid">
+        @if (PuedeCrear || (PuedeEditar && _productoAEditar is not null))
+        {
+            <ProductoForm ProductoAEditar="_productoAEditar" OnCreado="AlCrearProducto" OnActualizado="AlActualizarProducto" OnCancelarEdicion="CancelarEdicion" />
+        }
+        else if (PuedeEditar)
+        {
+            <section class="card form-card" aria-labelledby="producto-form-title">
+                <div class="card__header">
+                    <div class="icon-tile icon-tile--accent" aria-hidden="true"><svg class="icon"><use href="#icon-edit"></use></svg></div>
+                    <div class="card-header-copy">
+                        <h2 id="producto-form-title">Editar producto</h2>
+                        <p>Selecciona un producto de la tabla para modificar sus datos.</p>
+                    </div>
+                </div>
+            </section>
+        }
+        else
+        {
+            <section class="card form-card" aria-labelledby="producto-form-title">
+                <div class="card__header">
+                    <div class="icon-tile icon-tile--soft" aria-hidden="true"><svg class="icon"><use href="#icon-lock"></use></svg></div>
+                    <div class="card-header-copy">
+                        <h2 id="producto-form-title">Solo lectura</h2>
+                        <p>Tu rol puede consultar el inventario, pero no crear ni modificar productos.</p>
+                    </div>
+                </div>
+            </section>
+        }
+
+        <ProductosTable Productos="@_productos"
+                        IdProductoEditando="@_productoAEditar?.IdProducto"
+                        Cargando="@_cargando"
+                        Error="@_error"
+                        PuedeEditar="@PuedeEditar"
+                        PuedeDesactivar="@PuedeDesactivar"
+                        OnEditar="SeleccionarParaEditar"
+                        OnDesactivar="DesactivarAsync"
+                        OnReactivar="ReactivarAsync"
+                        OnRefrescar="CargarProductosAsync" />
+    </div>
+</div>
+
+@code {
+    private readonly List<ProductoVista> _productos = new();
+    private ProductoDto? _productoAEditar;
+    private CancellationTokenSource? _cts;
+    private bool _cargando;
+    private bool _disposed;
+    private string? _error;
+
+    private string ConteoTotal => _cargando || _error is not null ? "—" : _productos.Count.ToString();
+    private string ConteoActivos => _cargando || _error is not null ? "—" : _productos.Count(p => p.Activo).ToString();
+
+    private bool PuedeCrear => Sesion.TienePermiso(PermisoCodigos.InventarioCrear);
+    private bool PuedeEditar => Sesion.TienePermiso(PermisoCodigos.InventarioEditar);
+    private bool PuedeDesactivar => Sesion.TienePermiso(PermisoCodigos.InventarioDesactivar);
+
+    protected override async Task OnInitializedAsync() => await CargarProductosAsync();
+
+    public void Dispose()
+    {
+        _disposed = true;
+        _cts?.Cancel();
+        _cts?.Dispose();
+    }
+
+    private async Task CargarProductosAsync()
+    {
+        if (_disposed) return;
+
+        _cts?.Cancel();
+        _cts?.Dispose();
+        _cts = new CancellationTokenSource();
+        _cargando = true;
+        _error = null;
+        ApiStatus.Establecer(EstadoApi.Cargando);
+
+        try
+        {
+            var productos = await Api.ListarAsync(_cts.Token);
+            _productos.Clear();
+            _productos.AddRange(productos.Select(p => new ProductoVista(p)));
+            ApiStatus.Establecer(EstadoApi.EnLinea);
+        }
+        catch (OperationCanceledException) when (_cts.IsCancellationRequested)
+        {
+        }
+        catch (ApiException ex)
+        {
+            _productos.Clear();
+            _error = ex.Message;
+            ApiStatus.Establecer(ex.Status == 0 ? EstadoApi.SinConexion : EstadoApi.Error);
+            Toasts.Mostrar("No se pudo cargar el inventario", ex.Message, ToastTipo.Error, 6500);
+        }
+        finally
+        {
+            if (!_disposed) _cargando = false;
+        }
+    }
+
+    private void SeleccionarParaEditar(ProductoDto producto)
+    {
+        if (!PuedeEditar)
+        {
+            Toasts.Mostrar("Acción no permitida", "Tu rol no puede modificar productos del inventario.", ToastTipo.Error);
+            return;
+        }
+
+        _productoAEditar = producto;
+    }
+
+    private void CancelarEdicion() => _productoAEditar = null;
+
+    private async Task AlCrearProducto(ProductoDto producto)
+    {
+        _productoAEditar = null;
+        await CargarProductosAsync();
+    }
+
+    private async Task AlActualizarProducto(ProductoDto producto)
+    {
+        _productoAEditar = null;
+        await CargarProductosAsync();
+    }
+
+    private async Task DesactivarAsync(ProductoDto producto)
+    {
+        if (!PuedeDesactivar)
+        {
+            Toasts.Mostrar("Acción no permitida", "Tu rol no puede dar de baja productos.", ToastTipo.Error);
+            return;
+        }
+
+        try
+        {
+            await Api.DesactivarAsync(producto.IdProducto);
+            Toasts.Mostrar("Producto desactivado", $"{producto.Nombre} ya no aparecerá como activo.", ToastTipo.Exito);
+            await CargarProductosAsync();
+        }
+        catch (ApiException ex)
+        {
+            Toasts.Mostrar("No se pudo desactivar", ex.Message, ToastTipo.Error);
+        }
+    }
+
+    private async Task ReactivarAsync(ProductoDto producto)
+    {
+        if (!PuedeDesactivar)
+        {
+            Toasts.Mostrar("Acción no permitida", "Tu rol no puede reactivar productos.", ToastTipo.Error);
+            return;
+        }
+
+        try
+        {
+            await Api.ReactivarAsync(producto.IdProducto);
+            Toasts.Mostrar("Producto reactivado", $"{producto.Nombre} está activo nuevamente.", ToastTipo.Exito);
+            await CargarProductosAsync();
+        }
+        catch (ApiException ex)
+        {
+            Toasts.Mostrar("No se pudo reactivar", ex.Message, ToastTipo.Error);
+        }
+    }
+}

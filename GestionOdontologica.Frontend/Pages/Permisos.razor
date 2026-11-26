@@ -1,0 +1,2011 @@
+@page "/permisos"
+@attribute [Authorize(Policy = PermisoCodigos.PermisosVer)]
+@implements IDisposable
+@inject PermisosApiService Api
+@inject SesionService Sesion
+@inject ToastService Toasts
+@inject ApiStatusService ApiStatus
+
+<PageTitle>Permisos | OdontoCare</PageTitle>
+
+<style>
+    /* =========================================
+       TABLA DE PERMISOS - ESTILOS ESPECÍFICOS
+       ========================================= */
+
+    .permisos-page .permisos-table {
+        width: 100%;
+        min-width: 1180px;
+        table-layout: fixed;
+    }
+
+    .permisos-page .permisos-table th:nth-child(1),
+    .permisos-page .permisos-table td:nth-child(1) {
+        width: 7% !important;
+    }
+
+    .permisos-page .permisos-table th:nth-child(2),
+    .permisos-page .permisos-table td:nth-child(2) {
+        width: 19% !important;
+    }
+
+    .permisos-page .permisos-table th:nth-child(3),
+    .permisos-page .permisos-table td:nth-child(3) {
+        width: 23% !important;
+    }
+
+    .permisos-page .permisos-table th:nth-child(4),
+    .permisos-page .permisos-table td:nth-child(4) {
+        width: 13% !important;
+    }
+
+    .permisos-page .permisos-table th:nth-child(5),
+    .permisos-page .permisos-table td:nth-child(5) {
+        width: 11% !important;
+    }
+
+    .permisos-page .permisos-table th:nth-child(6),
+    .permisos-page .permisos-table td:nth-child(6) {
+        width: 10% !important;
+    }
+
+    .permisos-page .permisos-table th:nth-child(7),
+    .permisos-page .permisos-table td:nth-child(7) {
+        width: 17% !important;
+    }
+
+    .permisos-page .permisos-table .col-id {
+        color: var(--muted);
+        font-size: 11.5px;
+        font-weight: 650;
+        white-space: nowrap;
+    }
+
+    .permisos-page .permisos-table .permiso-name-cell,
+    .permisos-page .permisos-table .permiso-description-cell {
+        min-width: 0;
+        vertical-align: middle;
+        white-space: normal !important;
+        overflow: visible;
+    }
+
+    .permisos-page .permisos-table .permiso-name {
+        display: block;
+        width: 100%;
+        min-width: 0;
+        margin: 0;
+        color: #16353c;
+        font-size: 12.4px;
+        font-weight: 650;
+        line-height: 1.35;
+        white-space: normal !important;
+        overflow: visible !important;
+        overflow-wrap: anywhere;
+        text-overflow: clip !important;
+    }
+
+    .permisos-page .permisos-table .permiso-meta {
+        display: block;
+        margin-top: 2px;
+        color: var(--muted);
+        font-size: 10.3px;
+        font-weight: 550;
+        white-space: nowrap;
+    }
+
+    .permisos-page .permisos-table .permiso-description {
+        display: block;
+        width: 100%;
+        min-width: 0;
+        margin: 0;
+        color: #40585e;
+        font-size: 11.6px;
+        line-height: 1.45;
+        white-space: normal !important;
+        overflow: visible !important;
+        overflow-wrap: anywhere;
+        text-overflow: clip !important;
+    }
+
+    .permission-chip {
+        display: inline-flex;
+        align-items: center;
+        max-width: 100%;
+        padding: 3px 9px;
+        border-radius: 999px;
+        background: #eef4f3;
+        color: #0f766e;
+        font-size: 10.4px;
+        font-weight: 650;
+        line-height: 1.3;
+        overflow-wrap: anywhere;
+    }
+
+    .permission-chip--action {
+        border-radius: 7px;
+        background: #f1f5f9;
+        color: #475569;
+        font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+        letter-spacing: 0.01em;
+    }
+
+    .permisos-page .permisos-table th:nth-child(6),
+    .permisos-page .permisos-table td:nth-child(6),
+    .permisos-page .permisos-table th:nth-child(7),
+    .permisos-page .permisos-table td:nth-child(7) {
+        white-space: nowrap;
+    }
+
+    .permisos-page .permisos-table .action-buttons-group {
+        display: flex;
+        align-items: center;
+        justify-content: flex-start;
+        gap: 7px;
+        width: 100%;
+        min-width: 0;
+        flex-wrap: nowrap;
+        white-space: nowrap;
+    }
+
+    .permisos-page .permisos-table .btn-action {
+        flex: 0 0 auto;
+    }
+
+    /* Barra de pestañas de la sección */
+
+    .permisos-tabs-row {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 14px;
+        flex-wrap: wrap;
+        margin-bottom: 18px;
+    }
+
+    .permisos-tabs-row .filter-tab {
+        padding: 8px 16px;
+        font-size: 12px;
+    }
+
+    .permisos-workspace--single {
+        grid-template-columns: minmax(0, 1fr) !important;
+    }
+
+    /* =========================================
+       ASIGNACIÓN DE PERMISOS POR ROL
+       ========================================= */
+
+    .assignment-layout {
+        display: grid;
+        grid-template-columns: minmax(280px, 340px) minmax(0, 1fr);
+        gap: 22px;
+        align-items: start;
+    }
+
+    .assignment-card {
+        padding: 22px;
+    }
+
+    .role-summary {
+        display: flex;
+        flex-direction: column;
+        gap: 12px;
+        margin-top: 16px;
+        padding: 16px;
+        border: 1px solid var(--line);
+        border-radius: 14px;
+        background: #f7faf9;
+    }
+
+    .role-summary__top {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+    }
+
+    .role-summary__avatar {
+        display: grid;
+        width: 38px;
+        height: 38px;
+        flex: 0 0 38px;
+        place-items: center;
+        border-radius: 12px;
+        background: #e3f1ef;
+        color: var(--primary);
+    }
+
+    .role-summary__avatar .icon {
+        width: 18px;
+        height: 18px;
+    }
+
+    .role-summary__name {
+        display: block;
+        color: #16353c;
+        font-size: 13px;
+        font-weight: 700;
+        line-height: 1.3;
+    }
+
+    .role-summary__description {
+        margin: 0;
+        color: var(--text-soft);
+        font-size: 11.5px;
+        line-height: 1.5;
+    }
+
+    .role-summary__stats {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 8px;
+    }
+
+    .role-stat {
+        display: inline-flex;
+        flex-direction: column;
+        gap: 1px;
+        min-width: 74px;
+        padding: 8px 10px;
+        border-radius: 10px;
+        background: #ffffff;
+        border: 1px solid var(--line);
+    }
+
+    .role-stat span {
+        color: var(--muted);
+        font-size: 9.7px;
+        font-weight: 650;
+        letter-spacing: 0.03em;
+        text-transform: uppercase;
+    }
+
+    .role-stat strong {
+        color: #16353c;
+        font-size: 15px;
+        font-weight: 750;
+    }
+
+    .assignment-legend {
+        display: flex;
+        align-items: flex-start;
+        gap: 8px;
+        margin-top: 16px;
+        padding: 11px 13px;
+        border-radius: 11px;
+        background: #f1f7f6;
+        border: 1px solid #dceceb;
+        color: var(--text-soft);
+        font-size: 11px;
+        line-height: 1.45;
+    }
+
+    .assignment-legend .icon {
+        width: 14px;
+        height: 14px;
+        margin-top: 1px;
+        flex: 0 0 14px;
+        color: var(--primary);
+    }
+
+    .permission-group {
+        margin-bottom: 14px;
+        border: 1px solid var(--line);
+        border-radius: 14px;
+        background: #ffffff;
+        overflow: hidden;
+    }
+
+    .permission-group__header {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 12px;
+        padding: 10px 14px;
+        background: #f7faf9;
+        border-bottom: 1px solid var(--line);
+    }
+
+    .permission-group__title {
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+        min-width: 0;
+    }
+
+    .permission-group__title strong {
+        color: #16353c;
+        font-size: 12.3px;
+        font-weight: 700;
+        overflow-wrap: anywhere;
+    }
+
+    .permission-grid {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+
+    .permission-item {
+        display: flex;
+        align-items: flex-start;
+        gap: 10px;
+        padding: 11px 14px;
+        border-bottom: 1px solid #eef3f2;
+        cursor: pointer;
+        transition: background var(--transition);
+    }
+
+    .permission-item:hover {
+        background: #f9fcfb;
+    }
+
+    .permission-item.is-inactive {
+        opacity: 0.58;
+        cursor: not-allowed;
+    }
+
+    .permission-item input {
+        width: 16px;
+        height: 16px;
+        flex: 0 0 16px;
+        margin: 2px 0 0;
+        accent-color: var(--primary);
+        cursor: pointer;
+    }
+
+    .permission-item input:disabled {
+        cursor: not-allowed;
+    }
+
+    .permission-item__copy {
+        display: flex;
+        flex-direction: column;
+        gap: 1px;
+        min-width: 0;
+    }
+
+    .permission-item__name {
+        color: var(--text);
+        font-size: 11.8px;
+        font-weight: 600;
+        line-height: 1.35;
+        overflow-wrap: anywhere;
+    }
+
+    .permission-item__meta {
+        display: inline-flex;
+        align-items: center;
+        flex-wrap: wrap;
+        gap: 6px;
+        color: var(--muted);
+        font-size: 10.4px;
+    }
+
+    .assignment-footer {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 14px;
+        flex-wrap: wrap;
+        margin-top: 6px;
+        padding-top: 16px;
+        border-top: 1px solid var(--line);
+    }
+
+    .assignment-unsaved {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        color: #b45309;
+        font-size: 11.5px;
+        font-weight: 650;
+    }
+
+    .assignment-unsaved .icon {
+        width: 14px;
+        height: 14px;
+    }
+
+    @@media (max-width: 1100px) {
+        .permisos-page .permisos-table {
+            min-width: 1180px;
+        }
+    }
+
+    @@media (max-width: 980px) {
+        .assignment-layout {
+            grid-template-columns: minmax(0, 1fr);
+        }
+
+        .permission-grid {
+            grid-template-columns: minmax(0, 1fr);
+        }
+    }
+</style>
+
+<div class="page permisos-page">
+    <section class="page-heading" aria-labelledby="page-title">
+        <div class="page-heading__copy">
+            <h1 id="page-title">Gestión de Permisos</h1>
+            <p>
+                Administra el catálogo de permisos del sistema y asígnalos a los
+                roles para controlar qué puede hacer cada usuario.
+            </p>
+        </div>
+
+        <div class="heading-meta" aria-label="Resumen">
+            <div class="meta-card">
+                <span>Total permisos</span>
+                <strong>@ConteoTotal</strong>
+            </div>
+            <div class="meta-card">
+                <span>Asignados a roles</span>
+                <strong class="text-success">@ConteoAsignados</strong>
+            </div>
+            <div class="meta-card">
+                <span>Módulos</span>
+                <strong>@ConteoModulos</strong>
+            </div>
+            <div class="meta-card">
+                <span>Estado API</span>
+                <strong class="meta-status @ApiStatus.ClaseCss">
+                    <span class="api-dot"></span>
+                    <span>@ApiStatus.TextoMeta</span>
+                </strong>
+            </div>
+        </div>
+    </section>
+
+    <div class="permisos-tabs-row">
+        <div class="filter-segmented" role="tablist" aria-label="Sección de permisos">
+            <button type="button"
+                    role="tab"
+                    aria-selected="@(_vista == "catalogo" ? "true" : "false")"
+                    class="filter-tab @(_vista == "catalogo" ? "is-active" : string.Empty)"
+                    @onclick="IrAlCatalogo">
+                <svg class="icon" aria-hidden="true"><use href="#icon-key"></use></svg>
+                <span>Catálogo de permisos</span>
+                <span class="filter-count">@TotalGeneral</span>
+            </button>
+
+            @if (PuedeAsignar)
+            {
+                <button type="button"
+                        role="tab"
+                        aria-selected="@(_vista == "asignacion" ? "true" : "false")"
+                        class="filter-tab @(_vista == "asignacion" ? "is-active" : string.Empty)"
+                        @onclick="IrAAsignacionAsync">
+                    <svg class="icon" aria-hidden="true"><use href="#icon-shield-check"></use></svg>
+                    <span>Asignación por rol</span>
+                </button>
+            }
+        </div>
+
+        @if (PuedeCrear)
+        {
+            <button type="button" class="button button--primary" @onclick="PrepararNuevoPermiso">
+                <svg class="icon" aria-hidden="true"><use href="#icon-plus"></use></svg>
+                <span class="button__label">Agregar permiso</span>
+            </button>
+        }
+    </div>
+
+    @if (_vista == "catalogo")
+    {
+        <div class="workspace-grid permisos-workspace @(MostrarFormulario ? string.Empty : "permisos-workspace--single")">
+            @if (MostrarFormulario)
+            {
+                <section class="card form-card @(EsModoEdicion ? "form-card--editing" : string.Empty)"
+                         aria-labelledby="form-title">
+                    <div class="card__header">
+                        <div class="icon-tile @(EsModoEdicion ? "icon-tile--accent" : "icon-tile--primary")"
+                             aria-hidden="true">
+                            <svg class="icon">
+                                <use href="@(EsModoEdicion ? "#icon-edit" : "#icon-plus")"></use>
+                            </svg>
+                        </div>
+
+                        <div class="card-header-copy">
+                            <div class="card-header-title-row">
+                                <h2 id="form-title">
+                                    @(EsModoEdicion ? "Editar permiso" : "Agregar permiso")
+                                </h2>
+
+                                @if (EsModoEdicion && _permisoAEditar is not null)
+                                {
+                                    <span class="edit-badge">ID #@_permisoAEditar.IdPermiso</span>
+                                }
+                            </div>
+
+                            <p>
+                                @(EsModoEdicion
+                                    ? $"Modifica la información de {_permisoAEditar?.Nombre}."
+                                    : "Registra una nueva acción protegida por el sistema.")
+                            </p>
+                        </div>
+                    </div>
+
+                    @if (EsModoEdicion)
+                    {
+                        <div class="editing-banner" role="status">
+                            <div class="editing-banner__info">
+                                <svg class="icon"><use href="#icon-info"></use></svg>
+                                <span>
+                                    Editando <strong>@_permisoAEditar?.Nombre</strong>
+                                </span>
+                            </div>
+
+                            <button type="button"
+                                    class="btn-link"
+                                    disabled="@_guardando"
+                                    @onclick="CancelarEdicion">
+                                Descartar cambios
+                            </button>
+                        </div>
+                    }
+
+                    <EditForm Model="_modelo"
+                              OnValidSubmit="GuardarAsync"
+                              class="usuario-form"
+                              aria-busy="@(_guardando ? "true" : "false")">
+                        <DataAnnotationsValidator />
+
+                        <div class="@ClaseCampo(nameof(PermisoFormulario.Nombre))">
+                            <label for="nombrePermiso">Nombre del permiso *</label>
+
+                            <InputText id="nombrePermiso"
+                                       @bind-Value="_modelo.Nombre"
+                                       placeholder="Ej. Ver usuarios"
+                                       maxlength="100"
+                                       disabled="@_guardando"
+                                       autocomplete="off" />
+
+                            <ValidationMessage For="() => _modelo.Nombre" />
+                        </div>
+
+                        <div class="@ClaseCampo(nameof(PermisoFormulario.Descripcion))">
+                            <label for="descripcionPermiso">Descripción</label>
+
+                            <InputTextArea id="descripcionPermiso"
+                                           @bind-Value="_modelo.Descripcion"
+                                           placeholder="Describe qué permite este permiso..."
+                                           maxlength="250"
+                                           disabled="@_guardando"
+                                           rows="3" />
+
+                            <ValidationMessage For="() => _modelo.Descripcion" />
+                            <span class="field-hint">Máximo 250 caracteres.</span>
+                        </div>
+
+                        <div class="@ClaseCampo(nameof(PermisoFormulario.Modulo))">
+                            <label for="moduloPermiso">Módulo *</label>
+
+                            <InputText id="moduloPermiso"
+                                       @bind-Value="_modelo.Modulo"
+                                       placeholder="Ej. Usuarios"
+                                       maxlength="50"
+                                       list="modulos-sugeridos"
+                                       disabled="@_guardando"
+                                       autocomplete="off" />
+
+                            <datalist id="modulos-sugeridos">
+                                @foreach (var modulo in Modulos)
+                                {
+                                    <option value="@modulo"></option>
+                                }
+                            </datalist>
+
+                            <ValidationMessage For="() => _modelo.Modulo" />
+                        </div>
+
+                        <div class="@ClaseCampo(nameof(PermisoFormulario.Accion))">
+                            <label for="accionPermiso">Acción *</label>
+
+                            <InputText id="accionPermiso"
+                                       @bind-Value="_modelo.Accion"
+                                       placeholder="Ej. VER, CREAR, EDITAR..."
+                                       maxlength="30"
+                                       disabled="@_guardando"
+                                       autocomplete="off" />
+
+                            <ValidationMessage For="() => _modelo.Accion" />
+                            <span class="field-hint">Se guarda en mayúsculas (máximo 30 caracteres).</span>
+                        </div>
+
+                        @if (!string.IsNullOrWhiteSpace(_mensajeFeedback))
+                        {
+                            <p class="form-feedback @ClaseFeedback" role="alert">
+                                @_mensajeFeedback
+                            </p>
+                        }
+
+                        <div class="form-actions-row">
+                            @if (EsModoEdicion)
+                            {
+                                <button type="button"
+                                        class="button button--secondary"
+                                        disabled="@_guardando"
+                                        @onclick="CancelarEdicion">
+                                    Cancelar
+                                </button>
+                            }
+
+                            <button type="submit"
+                                    class="button button--primary"
+                                    disabled="@_guardando"
+                                    aria-busy="@(_guardando ? "true" : "false")">
+                                @if (_guardando)
+                                {
+                                    <span class="button__spinner" aria-hidden="true"></span>
+                                }
+
+                                <span class="button__label">
+                                    @(EsModoEdicion
+                                        ? (_guardando ? "Guardando..." : "Guardar cambios")
+                                        : (_guardando ? "Registrando..." : "Agregar permiso"))
+                                </span>
+                            </button>
+                        </div>
+                    </EditForm>
+                </section>
+            }
+
+            <section class="card table-card permisos-list-card" aria-labelledby="permisos-list-title">
+                <div class="table-card__header">
+                    <div class="table-title-group">
+                        <div class="icon-tile icon-tile--soft" aria-hidden="true">
+                            <svg class="icon"><use href="#icon-key"></use></svg>
+                        </div>
+
+                        <div>
+                            <div class="title-line">
+                                <h2 id="permisos-list-title">Permisos registrados</h2>
+                                <span class="count-badge">@ConteoVisible</span>
+                            </div>
+                            <p>Consulta, filtra y administra el catálogo completo de permisos.</p>
+                        </div>
+                    </div>
+
+                    <div class="table-actions">
+                        <label class="search-box" for="permisos-search-input">
+                            <svg class="icon search-icon" aria-hidden="true">
+                                <use href="#icon-search"></use>
+                            </svg>
+
+                            <input id="permisos-search-input"
+                                   type="search"
+                                   placeholder="Buscar por nombre, descripción o acción..."
+                                   autocomplete="off"
+                                   @bind="Busqueda"
+                                   @bind:event="oninput" />
+
+                            @if (!string.IsNullOrWhiteSpace(Busqueda))
+                            {
+                                <button type="button"
+                                        class="btn-clear-search"
+                                        aria-label="Limpiar búsqueda"
+                                        @onclick="LimpiarBusqueda">
+                                    <svg class="icon"><use href="#icon-x"></use></svg>
+                                </button>
+                            }
+                        </label>
+
+                        <select class="filter-select"
+                                aria-label="Filtrar por módulo"
+                                @bind="FiltroModulo">
+                            <option value="todos">Todos los módulos</option>
+                            @foreach (var modulo in Modulos)
+                            {
+                                <option value="@modulo">@modulo</option>
+                            }
+                        </select>
+
+                        <button type="button"
+                                class="icon-button icon-button--soft @(_cargando ? "is-spinning" : string.Empty)"
+                                aria-label="Actualizar listado"
+                                title="Actualizar listado"
+                                disabled="@_cargando"
+                                @onclick="CargarPermisosAsync">
+                            <svg class="icon"><use href="#icon-refresh"></use></svg>
+                        </button>
+                    </div>
+                </div>
+
+                @if (TieneFiltrosActivos)
+                {
+                    <div class="table-toolbar">
+                        <span class="table-footer__hint">
+                            @PermisosFiltrados.Count() de @TotalGeneral permisos
+                        </span>
+
+                        <div class="filter-group-right">
+                            <button type="button"
+                                    class="btn-clear-filters"
+                                    @onclick="LimpiarFiltros"
+                                    title="Restablecer filtros">
+                                <svg class="icon"><use href="#icon-x"></use></svg>
+                                <span>Limpiar filtros</span>
+                            </button>
+                        </div>
+                    </div>
+                }
+
+                <div class="table-wrap" aria-live="polite">
+                    <table class="users-table permisos-table">
+                        <thead>
+                            <tr>
+                                <th scope="col">ID</th>
+                                <th scope="col">Nombre</th>
+                                <th scope="col">Descripción</th>
+                                <th scope="col">Módulo</th>
+                                <th scope="col">Acción</th>
+                                <th scope="col" class="col-actions">Opciones</th>
+                            </tr>
+                        </thead>
+
+                        <tbody>
+                            @if (_cargando && _permisos.Count == 0)
+                            {
+                                @for (var i = 0; i < 4; i++)
+                                {
+                                    <tr class="skeleton-row" aria-hidden="true">
+                                        <td><span class="skeleton skeleton--line skeleton--line-sm"></span></td>
+                                        <td><span class="skeleton skeleton--line skeleton--line-lg"></span></td>
+                                        <td><span class="skeleton skeleton--line"></span></td>
+                                        <td><span class="skeleton skeleton--badge"></span></td>
+                                        <td><span class="skeleton skeleton--badge"></span></td>
+                                        <td class="col-actions"><span class="skeleton skeleton--badge"></span></td>
+                                    </tr>
+                                }
+                            }
+                            else if (_error is not null)
+                            {
+                                <tr>
+                                    <td colspan="6">
+                                        <div class="table-state table-state--error" role="alert">
+                                            <div class="table-state__icon" aria-hidden="true">
+                                                <svg class="icon"><use href="#icon-alert"></use></svg>
+                                            </div>
+                                            <strong>No se pudieron cargar los permisos</strong>
+                                            <p>@_error</p>
+                                            <button type="button"
+                                                    class="button button--secondary"
+                                                    @onclick="CargarPermisosAsync">
+                                                <svg class="icon"><use href="#icon-refresh"></use></svg>
+                                                Reintentar
+                                            </button>
+                                        </div>
+                                    </td>
+                                </tr>
+                            }
+                            else if (_permisos.Count == 0)
+                            {
+                                <tr>
+                                    <td colspan="6">
+                                        <div class="table-state">
+                                            <div class="table-state__icon" aria-hidden="true">
+                                                <svg class="icon"><use href="#icon-key"></use></svg>
+                                            </div>
+                                            <strong>Todavía no hay permisos</strong>
+                                            <p>Utiliza el formulario para registrar el primer permiso del sistema.</p>
+                                        </div>
+                                    </td>
+                                </tr>
+                            }
+                            else if (!PermisosFiltrados.Any())
+                            {
+                                <tr>
+                                    <td colspan="6">
+                                        <div class="table-state">
+                                            <div class="table-state__icon" aria-hidden="true">
+                                                <svg class="icon"><use href="#icon-search"></use></svg>
+                                            </div>
+                                            <strong>Sin resultados</strong>
+                                            <p>No se encontraron permisos con los filtros aplicados.</p>
+                                            <button type="button"
+                                                    class="button button--secondary"
+                                                    @onclick="LimpiarFiltros">
+                                                Restablecer filtros
+                                            </button>
+                                        </div>
+                                    </td>
+                                </tr>
+                            }
+                            else
+                            {
+                                @foreach (var permiso in PermisosPagina)
+                                {
+                                    var esEditando = _permisoAEditar?.IdPermiso == permiso.IdPermiso;
+
+                                    <tr @key="permiso.IdPermiso"
+                                        class="user-row @(esEditando ? "user-row--editing" : string.Empty)">
+                                        <td class="col-id">#@permiso.IdPermiso</td>
+
+                                        <td class="permiso-name-cell">
+                                            <span class="permiso-name">@permiso.Nombre</span>
+                                            <span class="permiso-meta">
+                                                @permiso.Asignaciones
+                                                @(permiso.Asignaciones == 1 ? "rol asignado" : "roles asignados")
+                                            </span>
+                                        </td>
+
+                                        <td class="permiso-description-cell">
+                                            <span class="permiso-description">
+                                                @(string.IsNullOrWhiteSpace(permiso.Descripcion)
+                                                    ? "Sin descripción"
+                                                    : permiso.Descripcion)
+                                            </span>
+                                        </td>
+
+                                        <td>
+                                            <span class="permission-chip">@permiso.Modulo</span>
+                                        </td>
+
+                                        <td>
+                                            <span class="permission-chip permission-chip--action">
+                                                @permiso.Accion
+                                            </span>
+                                        </td>
+
+                                        <td class="col-actions">
+                                            <div class="action-buttons-group">
+                                                @if (PuedeEditar)
+                                                {
+                                                    <button type="button"
+                                                            class="btn-action btn-action--edit @(esEditando ? "is-selected" : string.Empty)"
+                                                            title="@($"Editar permiso {permiso.Nombre}")"
+                                                            aria-label="@($"Editar permiso {permiso.Nombre}")"
+                                                            @onclick="() => SeleccionarParaEditar(permiso)">
+                                                        <svg class="icon" aria-hidden="true">
+                                                            <use href="#icon-edit"></use>
+                                                        </svg>
+                                                        <span>Editar</span>
+                                                    </button>
+                                                }
+
+                                                @if (PuedeEliminar)
+                                                {
+                                                    <button type="button"
+                                                            class="btn-action btn-action--danger"
+                                                            title="@($"Eliminar permiso {permiso.Nombre}")"
+                                                            aria-label="@($"Eliminar permiso {permiso.Nombre}")"
+                                                            @onclick="() => SolicitarEliminacion(permiso)">
+                                                        <svg class="icon" aria-hidden="true">
+                                                            <use href="#icon-trash"></use>
+                                                        </svg>
+                                                        <span>Eliminar</span>
+                                                    </button>
+                                                }
+                                            </div>
+                                        </td>
+                                    </tr>
+                                }
+                            }
+                        </tbody>
+                    </table>
+                </div>
+
+                <DataPagination TotalRegistros="PermisosFiltrados.Count()"
+                                PaginaActual="_paginacion.PaginaEfectiva(PermisosFiltrados.Count())"
+                                TamanoPagina="_paginacion.Tamano"
+                                Singular="permiso"
+                                Plural="permisos"
+                                OnPaginaCambiada="IrAPagina"
+                                OnTamanoCambiado="CambiarTamanoPagina" />
+
+                <div class="table-footer">
+                    <span>@Resumen</span>
+                    <span class="table-footer__hint">
+                        Datos sincronizados con Oracle Database
+                        @if (_cargando && _permisos.Count > 0)
+                        {
+                            <span> · Actualizando...</span>
+                        }
+                    </span>
+                </div>
+            </section>
+        </div>
+    }
+    else
+    {
+        <div class="assignment-layout">
+            <section class="card assignment-card" aria-labelledby="assignment-role-title">
+                <div class="card__header">
+                    <div class="icon-tile icon-tile--primary" aria-hidden="true">
+                        <svg class="icon"><use href="#icon-shield-check"></use></svg>
+                    </div>
+
+                    <div class="card-header-copy">
+                        <div class="card-header-title-row">
+                            <h2 id="assignment-role-title">Rol a configurar</h2>
+                        </div>
+                        <p>Selecciona el rol cuyos permisos deseas administrar.</p>
+                    </div>
+                </div>
+
+                <div class="field" style="margin-top: 18px;">
+                    <label for="rolAsignacion">Rol</label>
+
+                    <select id="rolAsignacion"
+                            class="form-control"
+                            @bind="_idRolSeleccionado"
+                            @bind:after="CargarAsignacionAsync"
+                            disabled="@(_guardandoAsignacion)">
+                        <option value="0">Selecciona un rol...</option>
+                        @foreach (var rol in _roles)
+                        {
+                            <option value="@rol.IdRol">@rol.NombreRol</option>
+                        }
+                    </select>
+                </div>
+
+                @if (RolSeleccionado is not null)
+                {
+                    <div class="role-summary">
+                        <div class="role-summary__top">
+                            <div class="role-summary__avatar" aria-hidden="true">
+                                <svg class="icon"><use href="#icon-shield"></use></svg>
+                            </div>
+                            <div>
+                                <span class="role-summary__name">@RolSeleccionado.NombreRol</span>
+                                <span class="status-pill @(RolSeleccionado.Activo ? "status-pill--active" : "status-pill--inactive")">
+                                    <span aria-hidden="true"></span>
+                                    @(RolSeleccionado.Activo ? "Activo" : "Inactivo")
+                                </span>
+                            </div>
+                        </div>
+
+                        <p class="role-summary__description">
+                            @(string.IsNullOrWhiteSpace(RolSeleccionado.Descripcion)
+                                ? "Este rol no tiene una descripción registrada."
+                                : RolSeleccionado.Descripcion)
+                        </p>
+
+                        <div class="role-summary__stats">
+                            <div class="role-stat">
+                                <span>Asignados</span>
+                                <strong>@AsignadosCount</strong>
+                            </div>
+                            <div class="role-stat">
+                                <span>Disponibles</span>
+                                <strong>@PermisosAsignables</strong>
+                            </div>
+                            <div class="role-stat">
+                                <span>Módulos</span>
+                                <strong>@PermisosAgrupados.Count()</strong>
+                            </div>
+                        </div>
+                    </div>
+                }
+
+                <div class="assignment-legend" role="note">
+                    <svg class="icon"><use href="#icon-info"></use></svg>
+                    <span>
+                        Los cambios se aplican al guardar. El backend valida que el rol y los
+                        permisos existan antes de registrar la asignación.
+                    </span>
+                </div>
+
+                @if (!string.IsNullOrWhiteSpace(_errorAsignacion))
+                {
+                    <p class="form-feedback is-error" role="alert" style="margin-top: 14px;">
+                        @_errorAsignacion
+                    </p>
+                }
+            </section>
+
+            <section class="card assignment-card" aria-labelledby="assignment-list-title">
+                <div class="table-card__header">
+                    <div class="table-title-group">
+                        <div class="icon-tile icon-tile--soft" aria-hidden="true">
+                            <svg class="icon"><use href="#icon-key"></use></svg>
+                        </div>
+
+                        <div>
+                            <div class="title-line">
+                                <h2 id="assignment-list-title">Permisos disponibles</h2>
+                                <span class="count-badge">@AsignadosCount</span>
+                            </div>
+                            <p>Marca los permisos que debe tener el rol seleccionado.</p>
+                        </div>
+                    </div>
+
+                    <div class="table-actions">
+                        <label class="search-box" for="assignment-search-input">
+                            <svg class="icon search-icon" aria-hidden="true">
+                                <use href="#icon-search"></use>
+                            </svg>
+
+                            <input id="assignment-search-input"
+                                   type="search"
+                                   placeholder="Buscar permiso..."
+                                   autocomplete="off"
+                                   @bind="_busquedaAsignacion"
+                                   @bind:event="oninput"
+                                   disabled="@(_cargandoAsignacion || _idRolSeleccionado <= 0)" />
+
+                            @if (!string.IsNullOrWhiteSpace(_busquedaAsignacion))
+                            {
+                                <button type="button"
+                                        class="btn-clear-search"
+                                        aria-label="Limpiar búsqueda"
+                                        @onclick="LimpiarBusquedaAsignacion">
+                                    <svg class="icon"><use href="#icon-x"></use></svg>
+                                </button>
+                            }
+                        </label>
+
+                        <button type="button"
+                                class="icon-button icon-button--soft @(_cargandoAsignacion ? "is-spinning" : string.Empty)"
+                                aria-label="Recargar permisos del rol"
+                                title="Recargar permisos del rol"
+                                disabled="@(_cargandoAsignacion || _idRolSeleccionado <= 0)"
+                                @onclick="CargarAsignacionAsync">
+                            <svg class="icon"><use href="#icon-refresh"></use></svg>
+                        </button>
+                    </div>
+                </div>
+
+                <div class="table-toolbar">
+                    <div class="filter-segmented" aria-label="Resumen de asignación">
+                        <span class="filter-tab is-active">
+                            <span>Seleccionados</span>
+                            <span class="filter-count">@AsignadosCount</span>
+                        </span>
+                        <span class="filter-tab">
+                            <span>Total</span>
+                            <span class="filter-count">@TotalGeneral</span>
+                        </span>
+                    </div>
+
+                    @if (AsignacionModificada && !_cargandoAsignacion)
+                    {
+                        <div class="filter-group-right">
+                            <span class="assignment-unsaved">
+                                <svg class="icon" aria-hidden="true"><use href="#icon-alert"></use></svg>
+                                Cambios sin guardar
+                            </span>
+                        </div>
+                    }
+                </div>
+
+                <div style="padding: 18px 22px;">
+                    @if (_idRolSeleccionado <= 0)
+                    {
+                        <div class="table-state">
+                            <div class="table-state__icon" aria-hidden="true">
+                                <svg class="icon"><use href="#icon-shield"></use></svg>
+                            </div>
+                            <strong>Selecciona un rol</strong>
+                            <p>Elige un rol para consultar y modificar sus permisos.</p>
+                        </div>
+                    }
+                    else if (_cargandoAsignacion)
+                    {
+                        <div class="table-state">
+                            <div class="table-state__icon" aria-hidden="true">
+                                <svg class="icon"><use href="#icon-refresh"></use></svg>
+                            </div>
+                            <strong>Cargando permisos del rol...</strong>
+                            <p>Consultando la base de datos.</p>
+                        </div>
+                    }
+                    else if (!PermisosAgrupados.Any())
+                    {
+                        <div class="table-state">
+                            <div class="table-state__icon" aria-hidden="true">
+                                <svg class="icon"><use href="#icon-search"></use></svg>
+                            </div>
+                            <strong>Sin permisos para mostrar</strong>
+                            <p>No hay permisos que coincidan con la búsqueda actual.</p>
+                        </div>
+                    }
+                    else
+                    {
+                        @foreach (var grupo in PermisosAgrupados)
+                        {
+                            <div class="permission-group">
+                                <div class="permission-group__header">
+                                    <div class="permission-group__title">
+                                        <strong>@grupo.Key</strong>
+                                        <span class="count-badge">@grupo.Count()</span>
+                                    </div>
+
+                                    <button type="button"
+                                            class="btn-link"
+                                            disabled="@_guardandoAsignacion"
+                                            @onclick="() => AlternarModulo(grupo)">
+                                        @(ModuloCompleto(grupo) ? "Quitar todos" : "Seleccionar todos")
+                                    </button>
+                                </div>
+
+                                <div class="permission-grid">
+                                    @foreach (var permiso in grupo)
+                                    {
+                                        var asignado = EstaAsignado(permiso.IdPermiso);
+
+                                        <label class="permission-item">
+                                            <input type="checkbox"
+                                                   checked="@asignado"
+                                                   disabled="@_guardandoAsignacion"
+                                                   @onchange="e => AlternarPermiso(permiso.IdPermiso, e.Value)" />
+
+                                            <span class="permission-item__copy">
+                                                <span class="permission-item__name">@permiso.Nombre</span>
+                                                <span class="permission-item__meta">
+                                                    <span>@permiso.Accion</span>
+                                                </span>
+                                            </span>
+                                        </label>
+                                    }
+                                </div>
+                            </div>
+                        }
+                    }
+                </div>
+
+                @if (!string.IsNullOrWhiteSpace(_mensajeAsignacion))
+                {
+                    <div style="padding: 0 22px 12px;">
+                        <p class="form-feedback @(_mensajeAsignacionError ? "is-error" : "is-success")"
+                           role="status">
+                            @_mensajeAsignacion
+                        </p>
+                    </div>
+                }
+
+                <div style="padding: 0 22px 22px;">
+                    <div class="assignment-footer">
+                        <span class="table-footer__hint">
+                            @AsignadosCount de @TotalGeneral permisos seleccionados
+                        </span>
+
+                        <button type="button"
+                                class="button button--primary"
+                                disabled="@(!AsignacionModificada || _guardandoAsignacion || _cargandoAsignacion || _idRolSeleccionado <= 0)"
+                                aria-busy="@(_guardandoAsignacion ? "true" : "false")"
+                                @onclick="GuardarAsignacionAsync">
+                            @if (_guardandoAsignacion)
+                            {
+                                <span class="button__spinner" aria-hidden="true"></span>
+                            }
+                            <span class="button__label">
+                                @(_guardandoAsignacion ? "Guardando..." : "Guardar cambios")
+                            </span>
+                        </button>
+                    </div>
+                </div>
+            </section>
+        </div>
+    }
+
+    <ConfirmModal Visible="_confirmVisible"
+                  Titulo="¿Eliminar permiso?"
+                  Mensaje="@_confirmMensaje"
+                  Detalle="Esta acción elimina el permiso del catálogo. Solo es posible si no tiene roles asignados."
+                  BotonConfirmar="Eliminar permiso"
+                  EsPeligro="true"
+                  Icono="#icon-trash"
+                  Cargando="_confirmCargando"
+                  OnConfirmar="ConfirmarEliminacionAsync"
+                  OnCancelar="CerrarConfirmacion" />
+</div>
+
+@code {
+    private readonly List<PermisoDto> _permisos = new();
+    private readonly List<RolDto> _roles = new();
+    private readonly HashSet<int> _asignacion = new();
+    private readonly HashSet<int> _asignacionOriginal = new();
+
+    private PermisoDto? _permisoAEditar;
+    private PermisoFormulario _modelo = new();
+
+    private bool _cargando;
+    private bool _guardando;
+    private bool _disposed;
+
+    private string? _error;
+    private string _mensajeFeedback = string.Empty;
+    private bool _feedbackError;
+
+    private readonly Paginacion _paginacion = new();
+
+    private string _busqueda = string.Empty;
+    private string _filtroModulo = "todos";
+
+    private string Busqueda
+    {
+        get => _busqueda;
+        set
+        {
+            _busqueda = value;
+            _paginacion.Reiniciar();
+        }
+    }
+
+    private string FiltroModulo
+    {
+        get => _filtroModulo;
+        set
+        {
+            _filtroModulo = value;
+            _paginacion.Reiniciar();
+        }
+    }
+
+    private bool _confirmVisible;
+    private bool _confirmCargando;
+    private PermisoDto? _permisoAEliminar;
+
+    private string _vista = "catalogo";
+
+    private int _idRolSeleccionado;
+    private bool _cargandoAsignacion;
+    private bool _guardandoAsignacion;
+    private bool _asignacionCargada;
+    private string? _errorAsignacion;
+    private string? _mensajeAsignacion;
+    private bool _mensajeAsignacionError;
+    private string _busquedaAsignacion = string.Empty;
+    private PermisosRolDto? _rolAsignacion;
+
+    private CancellationTokenSource? _cts;
+    private int _secuencia;
+
+    private bool EsModoEdicion => _permisoAEditar is not null;
+
+    private bool PuedeCrear => Sesion.TienePermiso(PermisoCodigos.PermisosCrear);
+    private bool PuedeEditar => Sesion.TienePermiso(PermisoCodigos.PermisosEditar);
+    private bool PuedeEliminar => Sesion.TienePermiso(PermisoCodigos.PermisosEliminar);
+    private bool PuedeAsignar => Sesion.TienePermiso(PermisoCodigos.PermisosAsignar);
+
+    private bool MostrarFormulario => EsModoEdicion ? PuedeEditar : PuedeCrear;
+
+    private IReadOnlyList<string> Modulos =>
+        _permisos
+            .Select(permiso => permiso.Modulo)
+            .Where(modulo => !string.IsNullOrWhiteSpace(modulo))
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .OrderBy(modulo => modulo, StringComparer.OrdinalIgnoreCase)
+            .ToList();
+
+    private int TotalGeneral => _permisos.Count;
+    private int TotalAsignados => _permisos.Count(permiso => permiso.Asignaciones > 0);
+
+    private int ConteoModulos => Modulos.Count;
+
+    private string ConteoVisible =>
+        (_cargando && _permisos.Count == 0) || _error is not null
+            ? "—"
+            : PermisosFiltrados.Count().ToString();
+
+    private string ConteoTotal =>
+        (_cargando && _permisos.Count == 0) || _error is not null
+            ? "—"
+            : _permisos.Count.ToString();
+
+    private string ConteoAsignados =>
+        (_cargando && _permisos.Count == 0) || _error is not null
+            ? "—"
+            : TotalAsignados.ToString();
+
+    private bool TieneFiltrosActivos =>
+        !string.IsNullOrWhiteSpace(_busqueda)
+        || _filtroModulo != "todos";
+
+    private string ClaseFeedback =>
+        string.IsNullOrWhiteSpace(_mensajeFeedback)
+            ? string.Empty
+            : _feedbackError ? "is-error" : "is-success";
+
+    private IEnumerable<PermisoDto> PermisosFiltrados =>
+        _permisos.Where(permiso =>
+            (_filtroModulo == "todos"
+                || string.Equals(permiso.Modulo, _filtroModulo, StringComparison.OrdinalIgnoreCase))
+            &&
+            (string.IsNullOrWhiteSpace(_busqueda)
+                || permiso.Nombre.Contains(_busqueda.Trim(), StringComparison.OrdinalIgnoreCase)
+                || (permiso.Descripcion?.Contains(_busqueda.Trim(), StringComparison.OrdinalIgnoreCase) ?? false)
+                || permiso.Accion.Contains(_busqueda.Trim(), StringComparison.OrdinalIgnoreCase)
+                || permiso.Modulo.Contains(_busqueda.Trim(), StringComparison.OrdinalIgnoreCase)))
+        .OrderBy(permiso => permiso.Modulo, StringComparer.OrdinalIgnoreCase)
+        .ThenBy(permiso => permiso.Nombre, StringComparer.OrdinalIgnoreCase);
+
+    private List<PermisoDto> PermisosPagina => _paginacion.Aplicar(PermisosFiltrados).ToList();
+
+    private RolDto? RolSeleccionado =>
+        _roles.FirstOrDefault(rol => rol.IdRol == _idRolSeleccionado);
+
+    private int AsignadosCount => _asignacion.Count;
+
+    private int PermisosAsignables => _permisos.Count;
+
+    private IEnumerable<IGrouping<string, PermisoDto>> PermisosAgrupados =>
+        _permisos
+            .Where(permiso =>
+                string.IsNullOrWhiteSpace(_busquedaAsignacion)
+                || permiso.Nombre.Contains(_busquedaAsignacion.Trim(), StringComparison.OrdinalIgnoreCase)
+                || permiso.Accion.Contains(_busquedaAsignacion.Trim(), StringComparison.OrdinalIgnoreCase)
+                || permiso.Modulo.Contains(_busquedaAsignacion.Trim(), StringComparison.OrdinalIgnoreCase))
+            .GroupBy(permiso => permiso.Modulo)
+            .OrderBy(grupo => grupo.Key, StringComparer.OrdinalIgnoreCase);
+
+    private bool AsignacionModificada =>
+        _asignacionCargada && !_asignacion.SetEquals(_asignacionOriginal);
+
+    private string _confirmMensaje =>
+        _permisoAEliminar is null
+            ? "¿Está seguro de que desea eliminar este permiso?"
+            : $"¿Está seguro de que desea eliminar el permiso {_permisoAEliminar.Nombre}?";
+
+    private string Resumen
+    {
+        get
+        {
+            if (_cargando && _permisos.Count == 0)
+                return "Cargando permisos...";
+
+            if (_error is not null)
+                return "No se pudo cargar el listado";
+
+            var visibles = PermisosFiltrados.Count();
+
+            if (_permisos.Count == 0)
+                return "Sin permisos registrados";
+
+            if (TieneFiltrosActivos)
+                return $"{visibles} de {_permisos.Count} permisos coinciden con los filtros";
+
+            return $"{_permisos.Count} {(_permisos.Count == 1 ? "permiso registrado" : "permisos registrados")}";
+        }
+    }
+
+    protected override async Task OnInitializedAsync()
+    {
+        await CargarDatosAsync();
+    }
+
+    public void Dispose()
+    {
+        _disposed = true;
+        _secuencia++;
+
+        _cts?.Cancel();
+        _cts?.Dispose();
+        _cts = null;
+
+        if (ApiStatus.Estado == EstadoApi.Cargando)
+        {
+            ApiStatus.Establecer(EstadoApi.Desconocido);
+        }
+    }
+
+    private async Task CargarDatosAsync()
+    {
+        await CargarPermisosAsync();
+        await CargarRolesAsync();
+    }
+
+    private async Task CargarPermisosAsync()
+    {
+        if (_disposed)
+            return;
+
+        var secuencia = ++_secuencia;
+
+        _cts?.Cancel();
+        _cts?.Dispose();
+
+        _cts = new CancellationTokenSource();
+        var token = _cts.Token;
+
+        _cargando = true;
+        _error = null;
+        ApiStatus.Establecer(EstadoApi.Cargando);
+
+        try
+        {
+            var resultado = await Api.ListarAsync(token);
+
+            if (_disposed || secuencia != _secuencia)
+                return;
+
+            _permisos.Clear();
+            _permisos.AddRange(resultado);
+
+            ApiStatus.Establecer(EstadoApi.EnLinea);
+        }
+        catch (OperationCanceledException)
+        {
+            return;
+        }
+        catch (ApiException ex)
+        {
+            if (_disposed || secuencia != _secuencia)
+                return;
+
+            _permisos.Clear();
+            _error = ex.Message;
+
+            ApiStatus.Establecer(
+                ex.Status == 0
+                    ? EstadoApi.SinConexion
+                    : EstadoApi.Error);
+
+            Toasts.Mostrar(
+                "Error al cargar los permisos",
+                ex.Message,
+                ToastTipo.Error,
+                6500);
+        }
+        finally
+        {
+            if (!_disposed && secuencia == _secuencia)
+            {
+                _cargando = false;
+                StateHasChanged();
+            }
+        }
+    }
+
+    private async Task CargarRolesAsync()
+    {
+        try
+        {
+            var roles = await Api.ListarRolesAsync();
+
+            _roles.Clear();
+            _roles.AddRange(roles);
+
+            if (_idRolSeleccionado <= 0 && _roles.Count > 0)
+            {
+                _idRolSeleccionado = _roles[0].IdRol;
+            }
+        }
+        catch (ApiException ex)
+        {
+            Toasts.Mostrar(
+                "No se pudieron cargar los roles",
+                ex.Message,
+                ToastTipo.Error,
+                6500);
+        }
+    }
+
+    private void IrAlCatalogo()
+    {
+        _vista = "catalogo";
+    }
+
+    private async Task IrAAsignacionAsync()
+    {
+        _vista = "asignacion";
+
+        if (_idRolSeleccionado > 0 && !_asignacionCargada)
+        {
+            await CargarAsignacionAsync();
+        }
+    }
+
+    private void PrepararNuevoPermiso()
+    {
+        _vista = "catalogo";
+        _permisoAEditar = null;
+        _modelo = new PermisoFormulario();
+        LimpiarFeedback();
+    }
+
+    private string ClaseCampo(string propiedad) =>
+        _feedbackError
+        && propiedad == nameof(PermisoFormulario.Nombre)
+            ? "field has-error"
+            : "field";
+
+    private void SeleccionarParaEditar(PermisoDto permiso)
+    {
+        _vista = "catalogo";
+        _permisoAEditar = permiso;
+
+        _modelo = new PermisoFormulario
+        {
+            Nombre = permiso.Nombre,
+            Descripcion = permiso.Descripcion,
+            Modulo = permiso.Modulo,
+            Accion = permiso.Accion
+        };
+
+        LimpiarFeedback();
+    }
+
+    private void CancelarEdicion()
+    {
+        if (_guardando)
+            return;
+
+        _permisoAEditar = null;
+        _modelo = new PermisoFormulario();
+
+        LimpiarFeedback();
+    }
+
+    private void LimpiarFeedback()
+    {
+        _mensajeFeedback = string.Empty;
+        _feedbackError = false;
+    }
+
+    private void LimpiarBusqueda()
+    {
+        _busqueda = string.Empty;
+        _paginacion.Reiniciar();
+    }
+
+    private void LimpiarBusquedaAsignacion()
+    {
+        _busquedaAsignacion = string.Empty;
+    }
+
+    private void LimpiarFiltros()
+    {
+        _busqueda = string.Empty;
+        _filtroModulo = "todos";
+        _paginacion.Reiniciar();
+    }
+
+    private void IrAPagina(int pagina) => _paginacion.IrA(pagina, PermisosFiltrados.Count());
+
+    private void CambiarTamanoPagina(int tamano) => _paginacion.CambiarTamano(tamano);
+
+    private async Task GuardarAsync()
+    {
+        if (_guardando)
+            return;
+
+        LimpiarFeedback();
+
+        var nombre = _modelo.Nombre.Trim();
+        var modulo = _modelo.Modulo.Trim();
+        var accion = _modelo.Accion.Trim();
+
+        if (string.IsNullOrWhiteSpace(nombre))
+        {
+            _mensajeFeedback = "El nombre del permiso es obligatorio.";
+            _feedbackError = true;
+            return;
+        }
+
+        if (nombre.Length > 100)
+        {
+            _mensajeFeedback = "El nombre no puede superar los 100 caracteres.";
+            _feedbackError = true;
+            return;
+        }
+
+        if ((_modelo.Descripcion?.Length ?? 0) > 250)
+        {
+            _mensajeFeedback = "La descripción no puede superar los 250 caracteres.";
+            _feedbackError = true;
+            return;
+        }
+
+        if (string.IsNullOrWhiteSpace(modulo))
+        {
+            _mensajeFeedback = "El módulo es obligatorio.";
+            _feedbackError = true;
+            return;
+        }
+
+        if (modulo.Length > 50)
+        {
+            _mensajeFeedback = "El módulo no puede superar los 50 caracteres.";
+            _feedbackError = true;
+            return;
+        }
+
+        if (string.IsNullOrWhiteSpace(accion))
+        {
+            _mensajeFeedback = "La acción es obligatoria.";
+            _feedbackError = true;
+            return;
+        }
+
+        if (accion.Length > 50)
+        {
+            _mensajeFeedback = "La acción no puede superar los 50 caracteres.";
+            _feedbackError = true;
+            return;
+        }
+
+        _guardando = true;
+
+        try
+        {
+            if (EsModoEdicion && _permisoAEditar is not null)
+            {
+                var dto = new ActualizacionPermisoDto
+                {
+                    Nombre = nombre,
+                    Descripcion = NormalizarDescripcion(_modelo.Descripcion),
+                    Modulo = modulo,
+                    Accion = accion
+                };
+
+                await Api.ActualizarAsync(_permisoAEditar.IdPermiso, dto);
+
+                Toasts.Mostrar(
+                    "Permiso actualizado",
+                    $"El permiso {nombre} fue actualizado correctamente.",
+                    ToastTipo.Exito);
+
+                _permisoAEditar = null;
+                _modelo = new PermisoFormulario();
+            }
+            else
+            {
+                var dto = new CreacionPermisoDto
+                {
+                    Nombre = nombre,
+                    Descripcion = NormalizarDescripcion(_modelo.Descripcion),
+                    Modulo = modulo,
+                    Accion = accion
+                };
+
+                var creado = await Api.CrearAsync(dto);
+
+                Toasts.Mostrar(
+                    "Permiso registrado",
+                    $"El permiso {creado.Nombre} fue creado correctamente.",
+                    ToastTipo.Exito);
+
+                _modelo = new PermisoFormulario();
+            }
+
+            await CargarPermisosAsync();
+        }
+        catch (ApiException ex)
+        {
+            _mensajeFeedback = ex.Message;
+            _feedbackError = true;
+
+            Toasts.Mostrar(
+                "No se pudo guardar el permiso",
+                ex.Message,
+                ToastTipo.Error);
+        }
+        finally
+        {
+            _guardando = false;
+        }
+    }
+
+    private static string? NormalizarDescripcion(string? descripcion) =>
+        string.IsNullOrWhiteSpace(descripcion)
+            ? null
+            : descripcion.Trim();
+
+    private void SolicitarEliminacion(PermisoDto permiso)
+    {
+        if (permiso.Asignaciones > 0)
+        {
+            Toasts.Mostrar(
+                "Permiso en uso",
+                $"El permiso {permiso.Nombre} está asignado a {permiso.Asignaciones} rol(es). Quita las asignaciones antes de eliminarlo.",
+                ToastTipo.Error,
+                7000);
+
+            return;
+        }
+
+        _permisoAEliminar = permiso;
+        _confirmVisible = true;
+    }
+
+    private void CerrarConfirmacion()
+    {
+        if (_confirmCargando)
+            return;
+
+        _confirmVisible = false;
+        _permisoAEliminar = null;
+    }
+
+    private async Task ConfirmarEliminacionAsync()
+    {
+        if (_permisoAEliminar is null || _confirmCargando)
+            return;
+
+        var permiso = _permisoAEliminar;
+        _confirmCargando = true;
+
+        try
+        {
+            await Api.EliminarAsync(permiso.IdPermiso);
+
+            Toasts.Mostrar(
+                "Permiso eliminado",
+                $"El permiso {permiso.Nombre} fue eliminado correctamente.",
+                ToastTipo.Info);
+
+            if (_permisoAEditar?.IdPermiso == permiso.IdPermiso)
+            {
+                _permisoAEditar = null;
+                _modelo = new PermisoFormulario();
+                LimpiarFeedback();
+            }
+
+            _confirmVisible = false;
+            _permisoAEliminar = null;
+
+            await CargarPermisosAsync();
+
+            if (_asignacionCargada && _idRolSeleccionado > 0)
+            {
+                await CargarAsignacionAsync();
+            }
+        }
+        catch (ApiException ex)
+        {
+            Toasts.Mostrar(
+                "No se pudo eliminar el permiso",
+                ex.Message,
+                ToastTipo.Error,
+                7000);
+        }
+        finally
+        {
+            _confirmCargando = false;
+        }
+    }
+
+    private async Task CargarAsignacionAsync()
+    {
+        if (_idRolSeleccionado <= 0 || _disposed)
+        {
+            _asignacion.Clear();
+            _asignacionOriginal.Clear();
+            _asignacionCargada = false;
+            _rolAsignacion = null;
+            return;
+        }
+
+        if (_asignacionCargada && AsignacionModificada)
+        {
+            Toasts.Mostrar(
+                "Cambios descartados",
+                "Se descartaron los cambios sin guardar del rol anterior.",
+                ToastTipo.Info);
+        }
+
+        _cargandoAsignacion = true;
+        _errorAsignacion = null;
+        _mensajeAsignacion = null;
+        _mensajeAsignacionError = false;
+
+        try
+        {
+            var permisosRol = await Api.ObtenerPermisosRolAsync(_idRolSeleccionado);
+
+            _rolAsignacion = permisosRol;
+
+            _asignacion.Clear();
+            _asignacionOriginal.Clear();
+
+            foreach (var id in permisosRol.IdPermisos)
+            {
+                _asignacion.Add(id);
+                _asignacionOriginal.Add(id);
+            }
+
+            _asignacionCargada = true;
+        }
+        catch (ApiException ex)
+        {
+            _asignacion.Clear();
+            _asignacionOriginal.Clear();
+            _asignacionCargada = false;
+            _rolAsignacion = null;
+            _errorAsignacion = ex.Message;
+
+            Toasts.Mostrar(
+                "No se pudieron cargar los permisos del rol",
+                ex.Message,
+                ToastTipo.Error,
+                6500);
+        }
+        finally
+        {
+            _cargandoAsignacion = false;
+            StateHasChanged();
+        }
+    }
+
+    private bool EstaAsignado(int idPermiso) => _asignacion.Contains(idPermiso);
+
+    private void AlternarPermiso(int idPermiso, object? valor)
+    {
+        if (_guardandoAsignacion)
+            return;
+
+        var asignado = valor is bool marcado && marcado;
+
+        if (asignado)
+        {
+            _asignacion.Add(idPermiso);
+        }
+        else
+        {
+            _asignacion.Remove(idPermiso);
+        }
+    }
+
+    private bool ModuloCompleto(IGrouping<string, PermisoDto> grupo)
+    {
+        var ids = grupo
+            .Select(permiso => permiso.IdPermiso)
+            .ToList();
+
+        return ids.Count > 0 && ids.All(_asignacion.Contains);
+    }
+
+    private void AlternarModulo(IGrouping<string, PermisoDto> grupo)
+    {
+        if (_guardandoAsignacion)
+            return;
+
+        var ids = grupo
+            .Select(permiso => permiso.IdPermiso)
+            .ToList();
+
+        if (ids.Count == 0)
+            return;
+
+        var todos = ids.All(_asignacion.Contains);
+
+        foreach (var id in ids)
+        {
+            if (todos)
+            {
+                _asignacion.Remove(id);
+            }
+            else
+            {
+                _asignacion.Add(id);
+            }
+        }
+    }
+
+    private async Task GuardarAsignacionAsync()
+    {
+        if (_guardandoAsignacion || _idRolSeleccionado <= 0)
+            return;
+
+        _guardandoAsignacion = true;
+        _errorAsignacion = null;
+        _mensajeAsignacion = null;
+        _mensajeAsignacionError = false;
+
+        try
+        {
+            var dto = new ActualizacionPermisosRolDto
+            {
+                IdPermisos = _asignacion.OrderBy(id => id).ToList()
+            };
+
+            await Api.ActualizarPermisosRolAsync(_idRolSeleccionado, dto);
+
+            _asignacionOriginal.Clear();
+
+            foreach (var id in _asignacion)
+            {
+                _asignacionOriginal.Add(id);
+            }
+
+            var nombreRol = _rolAsignacion?.NombreRol ?? RolSeleccionado?.NombreRol ?? "el rol";
+
+            _mensajeAsignacion =
+                $"Los permisos de {nombreRol} se actualizaron correctamente.";
+            _mensajeAsignacionError = false;
+
+            Toasts.Mostrar(
+                "Permisos actualizados",
+                _mensajeAsignacion,
+                ToastTipo.Exito);
+
+            // Refresca el contador de asignaciones del catálogo.
+            await CargarPermisosAsync();
+        }
+        catch (ApiException ex)
+        {
+            _mensajeAsignacion = ex.Message;
+            _mensajeAsignacionError = true;
+
+            Toasts.Mostrar(
+                "No se pudo guardar la asignación",
+                ex.Message,
+                ToastTipo.Error,
+                7000);
+        }
+        finally
+        {
+            _guardandoAsignacion = false;
+        }
+    }
+
+    private sealed class PermisoFormulario : System.ComponentModel.DataAnnotations.IValidatableObject
+    {
+        [System.ComponentModel.DataAnnotations.Required(
+            ErrorMessage = "El nombre del permiso es obligatorio.")]
+        [System.ComponentModel.DataAnnotations.StringLength(
+            100,
+            ErrorMessage = "El nombre no puede superar los 100 caracteres.")]
+        public string Nombre { get; set; } = string.Empty;
+
+        [System.ComponentModel.DataAnnotations.StringLength(
+            250,
+            ErrorMessage = "La descripción no puede superar los 250 caracteres.")]
+        public string? Descripcion { get; set; }
+
+        [System.ComponentModel.DataAnnotations.Required(
+            ErrorMessage = "El módulo es obligatorio.")]
+        [System.ComponentModel.DataAnnotations.StringLength(
+            50,
+            ErrorMessage = "El módulo no puede superar los 50 caracteres.")]
+        public string Modulo { get; set; } = string.Empty;
+
+        [System.ComponentModel.DataAnnotations.Required(
+            ErrorMessage = "La acción es obligatoria.")]
+        [System.ComponentModel.DataAnnotations.StringLength(
+            30,
+            ErrorMessage = "La acción no puede superar los 30 caracteres.")]
+        public string Accion { get; set; } = string.Empty;
+
+        public IEnumerable<System.ComponentModel.DataAnnotations.ValidationResult> Validate(
+            System.ComponentModel.DataAnnotations.ValidationContext validationContext)
+        {
+            if (string.IsNullOrWhiteSpace(Nombre))
+            {
+                yield return new System.ComponentModel.DataAnnotations.ValidationResult(
+                    "El nombre del permiso es obligatorio y no puede contener solo espacios.",
+                    new[] { nameof(Nombre) });
+            }
+            else if (Nombre.Trim().Length > 100)
+            {
+                yield return new System.ComponentModel.DataAnnotations.ValidationResult(
+                    "El nombre no puede superar los 100 caracteres.",
+                    new[] { nameof(Nombre) });
+            }
+
+            if ((Descripcion?.Length ?? 0) > 250)
+            {
+                yield return new System.ComponentModel.DataAnnotations.ValidationResult(
+                    "La descripción no puede superar los 250 caracteres.",
+                    new[] { nameof(Descripcion) });
+            }
+
+            if (string.IsNullOrWhiteSpace(Modulo))
+            {
+                yield return new System.ComponentModel.DataAnnotations.ValidationResult(
+                    "El módulo es obligatorio y no puede contener solo espacios.",
+                    new[] { nameof(Modulo) });
+            }
+            else if (Modulo.Trim().Length > 50)
+            {
+                yield return new System.ComponentModel.DataAnnotations.ValidationResult(
+                    "El módulo no puede superar los 50 caracteres.",
+                    new[] { nameof(Modulo) });
+            }
+
+            if (string.IsNullOrWhiteSpace(Accion))
+            {
+                yield return new System.ComponentModel.DataAnnotations.ValidationResult(
+                    "La acción es obligatoria y no puede contener solo espacios.",
+                    new[] { nameof(Accion) });
+            }
+            else if (Accion.Trim().Length > 30)
+            {
+                yield return new System.ComponentModel.DataAnnotations.ValidationResult(
+                    "La acción no puede superar los 30 caracteres.",
+                    new[] { nameof(Accion) });
+            }
+        }
+    }
+}

@@ -1,0 +1,32 @@
+<div class="menu-acciones">
+    <button type="button"
+            class="menu-acciones__disparador @(_abierto ? "is-open" : string.Empty)"
+            aria-haspopup="menu"
+            aria-expanded="@(_abierto ? "true" : "false")"
+            aria-label="@Titulo"
+            title="@Titulo"
+            @onclick="Alternar">
+        <svg class="icon" aria-hidden="true"><use href="#icon-more"></use></svg>
+    </button>
+    @if (_abierto)
+    {
+        <div class="menu-acciones__fondo" aria-hidden="true" @onclick="Cerrar"></div>
+        <div class="menu-acciones__panel" role="menu" @onclick="Cerrar">
+            @ChildContent
+        </div>
+    }
+</div>
+
+@code {
+    [Parameter]
+    public string Titulo { get; set; } = "Más acciones";
+
+    [Parameter]
+    public RenderFragment? ChildContent { get; set; }
+
+    private bool _abierto;
+
+    private void Alternar() => _abierto = !_abierto;
+
+    private void Cerrar() => _abierto = false;
+}

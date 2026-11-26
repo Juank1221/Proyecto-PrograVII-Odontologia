@@ -1,0 +1,43 @@
+@inject SesionService Sesion
+@inject ToastService Toasts
+@inject NavigationManager Navigation
+
+@if (_listo && _permitido)
+{
+    @ChildContent
+}
+else if (!_listo)
+{
+    <div class="auth-boot" role="status" aria-live="polite">
+        <span class="auth-boot__spinner" aria-hidden="true"></span>
+        <span>Verificando tu sesión...</span>
+    </div>
+}
+
+@code {
+    [Parameter, EditorRequired]
+    public RouteData RouteData { get; set; } = default!;
+
+    [Parameter]
+    public RenderFragment? ChildContent { get; set; }
+
+    private bool _listo;
+    private bool _permitido;
+
+    protected override async Task OnParametersSetAsync()
+    {
+        await Sesion.InicializarAsync();
+
+        var permiso = RutasPermisos.PermisoDe(RouteData.PageType);
+
+        // Sin sesión, AuthorizeRouteView redirige al login.
+        _permitido = permiso is null || !Sesion.EsAutenticado || Sesion.TienePermiso(permiso);
+        _listo = true;
+
+        if (!_permitido)
+        {
+            Toasts.Mostrar("Acceso denegado", RutasPermisos.MensajeAccesoDenegado, ToastTipo.Error);
+            Navigation.NavigateTo("inicio", replace: true);
+        }
+    }
+}

@@ -1,0 +1,36 @@
+<PageTitle>@Titulo | OdontoCare</PageTitle>
+
+<div class="page">
+    <section class="page-heading" aria-labelledby="page-title">
+        <div class="page-heading__copy">
+            <span class="eyebrow">Sprint 1</span>
+            <h1 id="page-title">@Titulo</h1>
+            <p>@Descripcion</p>
+        </div>
+    </section>
+
+    <section class="card placeholder-card">
+        <div class="table-state">
+            <div class="table-state__icon" aria-hidden="true">
+                <svg class="icon"><use href="@Icono"></use></svg>
+            </div>
+            <strong>Módulo en preparación</strong>
+            <p>Esta sección se habilitará en un próximo sprint. Por ahora puedes gestionar los usuarios del sistema.</p>
+            <a class="button button--primary" href="usuarios">
+                <svg class="icon"><use href="#icon-users"></use></svg>
+                Ir a Usuarios
+            </a>
+        </div>
+    </section>
+</div>
+
+@code {
+    [Parameter, EditorRequired]
+    public string Titulo { get; set; } = string.Empty;
+
+    [Parameter]
+    public string Descripcion { get; set; } = string.Empty;
+
+    [Parameter]
+    public string Icono { get; set; } = "#icon-info";
+}

@@ -1,0 +1,62 @@
+﻿<CascadingAuthenticationState>
+    <Router AppAssembly="@typeof(App).Assembly">
+        <Found Context="routeData">
+            <AuthorizeRouteView RouteData="@routeData" DefaultLayout="@typeof(MainLayout)">
+                <NotAuthorized>
+                    <AuthorizeView>
+                        <Authorized Context="autorizadoContext">
+                            <RedirectToAccesoDenegado />
+                        </Authorized>
+                        <NotAuthorized Context="noAutorizadoContext">
+                            <RedirectToLogin />
+                        </NotAuthorized>
+                    </AuthorizeView>
+                </NotAuthorized>
+                <Authorizing>
+                    <div class="auth-boot" role="status" aria-live="polite">
+                        <span class="auth-boot__spinner" aria-hidden="true"></span>
+                        <span>Verificando tu sesión...</span>
+                    </div>
+                </Authorizing>
+            </AuthorizeRouteView>
+            <FocusOnNavigate RouteData="@routeData" Selector="h1" />
+        </Found>
+        <NotFound>
+            <AuthorizeView>
+                <Authorized>
+                    <LayoutView Layout="@typeof(MainLayout)">
+                        <div class="page">
+                            <section class="card placeholder-card" aria-labelledby="notfound-title">
+                                <div class="table-state">
+                                    <div class="table-state__icon" aria-hidden="true">
+                                        <svg class="icon"><use href="#icon-alert"></use></svg>
+                                    </div>
+                                    <h1 id="notfound-title">Página no encontrada</h1>
+                                    <p>La dirección que buscas no existe o fue movida.</p>
+                                    <a class="button button--primary" href="usuarios">Volver a Usuarios</a>
+                                </div>
+                            </section>
+                        </div>
+                    </LayoutView>
+                </Authorized>
+                <NotAuthorized>
+                    <LayoutView Layout="@typeof(EmptyLayout)">
+                        <div class="auth-page auth-page--centered">
+                            <section class="card auth-simple-card" aria-labelledby="notfound-anon-title">
+                                <span class="auth-form-icon" aria-hidden="true">
+                                    <svg class="icon"><use href="#icon-alert"></use></svg>
+                                </span>
+                                <h1 id="notfound-anon-title">Página no encontrada</h1>
+                                <p>La dirección que buscas no existe o requiere iniciar sesión.</p>
+                                <a class="button button--primary auth-submit" href="login">
+                                    <svg class="icon" aria-hidden="true"><use href="#icon-lock"></use></svg>
+                                    Iniciar sesión
+                                </a>
+                            </section>
+                        </div>
+                    </LayoutView>
+                </NotAuthorized>
+            </AuthorizeView>
+        </NotFound>
+    </Router>
+</CascadingAuthenticationState>

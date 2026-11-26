@@ -1,0 +1,280 @@
+@page "/login"
+@layout EmptyLayout
+@attribute [AllowAnonymous]
+@inject AuthApiService Api
+@inject SesionService Sesion
+@inject NavigationManager Navigation
+@inject ToastService Toasts
+
+<AuthShell TituloPagina="Iniciar sesión | OdontoCare"
+           IdTitulo="login-title"
+           Etiqueta="Acceso seguro"
+           Descripcion="Centraliza el equipo, los accesos y la operación diaria de la clínica en un solo lugar."
+           PiePagina="Validación de credenciales en el servidor">
+    <div class="auth-form-header">
+                <span class="auth-form-icon" aria-hidden="true">
+                    <svg class="icon"><use href="#icon-lock"></use></svg>
+                </span>
+                <h2 id="login-title">Bienvenido de nuevo</h2>
+                <p>Ingresa tus credenciales para acceder a la clínica.</p>
+            </div>
+
+            @if (!string.IsNullOrEmpty(_mensajeInfo))
+            {
+                <div class="auth-alert auth-alert--info" role="status">
+                    <svg class="icon" aria-hidden="true"><use href="#icon-info"></use></svg>
+                    <p>@_mensajeInfo</p>
+                </div>
+            }
+
+            @if (!string.IsNullOrEmpty(_mensajeError))
+            {
+                <div class="auth-alert @_claseAlertaError" role="alert">
+                    <svg class="icon" aria-hidden="true"><use href="@_iconoError"></use></svg>
+                    <div>
+                        <strong>@_tituloError</strong>
+                        <p>@_mensajeError</p>
+                    </div>
+                </div>
+            }
+
+            <EditForm Model="_modelo" OnValidSubmit="IniciarSesionAsync" class="auth-form">
+                <DataAnnotationsValidator />
+
+                <div class="field">
+                    <label for="identificador">Usuario o correo electrónico</label>
+                    <div class="auth-input">
+                        <svg class="icon" aria-hidden="true"><use href="#icon-user"></use></svg>
+                        <InputText id="identificador"
+                                   @bind-Value="_modelo.Identificador"
+                                   autocomplete="username"
+                                   placeholder="usuario o correo@clinica.com"
+                                   autofocus />
+                    </div>
+                    <ValidationMessage For="() => _modelo.Identificador" />
+                </div>
+
+                <div class="field">
+                    <div class="auth-label-row">
+                        <label for="password">Contraseña</label>
+                        <a class="auth-inline-link" href="recuperar-password">¿Olvidaste tu contraseña?</a>
+                    </div>
+                    <div class="auth-input password-control">
+                        <svg class="icon" aria-hidden="true"><use href="#icon-key"></use></svg>
+                        <InputText id="password"
+                                   type="@(_mostrarPassword ? "text" : "password")"
+                                   @bind-Value="_modelo.Password"
+                                   autocomplete="current-password"
+                                   placeholder="Tu contraseña" />
+                        <button type="button"
+                                class="password-toggle"
+                                aria-label="@(_mostrarPassword ? "Ocultar contraseña" : "Mostrar contraseña")"
+                                @onclick="AlternarPassword">
+                            <svg class="icon"><use href="@(_mostrarPassword ? "#icon-eye-off" : "#icon-eye")"></use></svg>
+                        </button>
+                    </div>
+                    <ValidationMessage For="() => _modelo.Password" />
+                </div>
+
+                <label class="checkbox-control">
+                    <InputCheckbox @bind-Value="_modelo.Recordarme" />
+                    <span>Recordarme por 7 días en este equipo</span>
+                </label>
+
+                <button type="submit" class="button button--primary auth-submit" disabled="@_enviando">
+                    @if (_enviando)
+                    {
+                        <span class="button__spinner" aria-hidden="true"></span>
+                        <span>Verificando credenciales...</span>
+                    }
+                    else
+                    {
+                        <svg class="icon" aria-hidden="true"><use href="#icon-lock"></use></svg>
+                        <span>Iniciar sesión</span>
+                    }
+                </button>
+            </EditForm>
+            <div class="auth-footer-meta">
+                <svg class="icon" aria-hidden="true"><use href="#icon-shield-check"></use></svg>
+                <span>Tus credenciales viajan de forma segura y nunca se muestran en pantalla.</span>
+            </div>
+</AuthShell>
+
+@code {
+    private readonly LoginFormModel _modelo = new();
+
+    private bool _mostrarPassword;
+    private bool _enviando;
+    private string _mensajeError = string.Empty;
+    private string _mensajeInfo = string.Empty;
+    private string _tituloError = string.Empty;
+    private string _iconoError = "#icon-alert";
+    private string _claseAlertaError = "auth-alert--error";
+
+    [SupplyParameterFromQuery(Name = "returnUrl")]
+    public string? ReturnUrl { get; set; }
+
+    [SupplyParameterFromQuery(Name = "motivo")]
+    public string? Motivo { get; set; }
+
+    private string? _motivoAplicado;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await Sesion.InicializarAsync();
+
+        if (Sesion.EsAutenticado)
+        {
+            Navigation.NavigateTo(ObtenerDestino(), replace: true);
+            return;
+        }
+
+        AplicarMotivo();
+    }
+
+    protected override void OnParametersSet()
+    {
+        // El cierre de sesión puede redirigir primero al login por el guard de
+        // autorización y luego agregar ?motivo=... reutilizando la instancia.
+        // OnParametersSet asegura que el mensaje se muestre en ese caso.
+        AplicarMotivo();
+    }
+
+    private void AplicarMotivo()
+    {
+        if (string.Equals(_motivoAplicado, Motivo, StringComparison.Ordinal))
+        {
+            return;
+        }
+
+        _motivoAplicado = Motivo;
+
+        _mensajeInfo = Motivo switch
+        {
+            "expirada" => "Tu sesión expiró por seguridad. Ingresa nuevamente para continuar.",
+            "sesion-cerrada" => "Cerraste sesión correctamente. ¡Hasta pronto!",
+            _ => string.Empty
+        };
+    }
+
+    private void AlternarPassword()
+    {
+        _mostrarPassword = !_mostrarPassword;
+    }
+
+    private async Task IniciarSesionAsync()
+    {
+        if (_enviando)
+        {
+            return;
+        }
+
+        _enviando = true;
+        _mensajeError = string.Empty;
+        _mensajeInfo = string.Empty;
+
+        try
+        {
+            var respuesta = await Api.IniciarSesionAsync(new LoginRequest
+            {
+                Identificador = _modelo.Identificador.Trim(),
+                Password = _modelo.Password,
+                Recordarme = _modelo.Recordarme
+            });
+
+            await Sesion.IniciarSesionAsync(respuesta);
+
+            Toasts.Mostrar(
+                "Bienvenido a OdontoCare",
+                $"Hola, {ObtenerPrimerNombre(respuesta.NombreCompleto)}. Tu sesión está activa.",
+                ToastTipo.Exito,
+                4000);
+
+            Navigation.NavigateTo(ObtenerDestino(), replace: true);
+        }
+        catch (ApiException ex)
+        {
+            AplicarError(ex);
+        }
+        catch (Exception)
+        {
+            _tituloError = "No pudimos iniciar sesión";
+            _mensajeError = "Ocurrió un error inesperado. Inténtalo nuevamente en unos segundos.";
+            _iconoError = "#icon-alert";
+            _claseAlertaError = "auth-alert--error";
+        }
+        finally
+        {
+            _enviando = false;
+        }
+    }
+
+    private void AplicarError(ApiException ex)
+    {
+        _mensajeError = ex.Message;
+
+        switch (ex.Status)
+        {
+            case 401:
+                _tituloError = "Credenciales incorrectas";
+                _iconoError = "#icon-alert";
+                _claseAlertaError = "auth-alert--error";
+                break;
+
+            case 403:
+                _tituloError = "Cuenta desactivada";
+                _iconoError = "#icon-lock";
+                _claseAlertaError = "auth-alert--error";
+                break;
+
+            case 423:
+                _tituloError = "Cuenta bloqueada temporalmente";
+                _iconoError = "#icon-clock";
+                _claseAlertaError = "auth-alert--warning";
+                break;
+
+            case 0:
+                _tituloError = "Sin conexión con la API";
+                _iconoError = "#icon-alert";
+                _claseAlertaError = "auth-alert--error";
+                break;
+
+            default:
+                _tituloError = "No pudimos iniciar sesión";
+                _iconoError = "#icon-alert";
+                _claseAlertaError = "auth-alert--error";
+                break;
+        }
+    }
+
+    private string ObtenerDestino()
+    {
+        if (string.IsNullOrWhiteSpace(ReturnUrl))
+        {
+            return "usuarios";
+        }
+
+        var destino = ReturnUrl.Trim();
+
+        if (!destino.StartsWith('/'))
+        {
+            destino = "/" + destino;
+        }
+
+        // Solo se permiten rutas internas: evita redirecciones a otros orígenes.
+        if (destino.StartsWith("//", StringComparison.Ordinal)
+            || destino.Contains("://", StringComparison.Ordinal)
+            || destino.StartsWith("/login", StringComparison.OrdinalIgnoreCase))
+        {
+            return "usuarios";
+        }
+
+        return destino.TrimStart('/');
+    }
+
+    private static string ObtenerPrimerNombre(string nombreCompleto)
+    {
+        var partes = nombreCompleto.Split(' ', StringSplitOptions.RemoveEmptyEntries);
+        return partes.Length > 0 ? partes[0] : "usuario";
+    }
+}

@@ -1,0 +1,597 @@
+@page "/pacientes"
+@attribute [Microsoft.AspNetCore.Authorization.Authorize]
+@using System.ComponentModel.DataAnnotations
+@using GestionOdontologica.Frontend.Models
+@using GestionOdontologica.Frontend.Services
+@inject PacientesApiService PacientesApi
+@inject ToastService ToastService
+
+<PageTitle>Pacientes</PageTitle>
+
+<div class="usuarios-page">
+    <header class="usuarios-page__header">
+        <div>
+            <h1>Pacientes</h1>
+            <p>Mantenimiento de pacientes y registro de antecedentes médicos/odontológicos.</p>
+        </div>
+    </header>
+
+    <div class="usuarios-layout">
+        <section class="usuarios-card usuarios-card--form">
+            <header class="usuarios-card__header">
+                <div>
+                    <h2>@(Editando ? "Editar paciente" : "Nuevo paciente")</h2>
+                    <p>@(Editando ? "Actualiza la información del paciente." : "Registra los datos personales y de contacto del paciente.")</p>
+                </div>
+            </header>
+            <EditForm Model="Formulario" OnValidSubmit="GuardarAsync">
+                <DataAnnotationsValidator />
+                <div class="form-section">
+                    <div class="form-section__header">
+                        <h3>Datos personales</h3>
+                        <p>Información básica de identificación</p>
+                    </div>
+                    <div class="form-grid">
+                        <div class="form-field form-field--span-2">
+                            <label>Nombres *</label>
+                            <InputText class="form-control" @bind-Value="Formulario.Nombres" />
+                            <ValidationMessage For="@(() => Formulario.Nombres)" />
+                        </div>
+                        <div class="form-field form-field--span-2">
+                            <label>Apellidos *</label>
+                            <InputText class="form-control" @bind-Value="Formulario.Apellidos" />
+                            <ValidationMessage For="@(() => Formulario.Apellidos)" />
+                        </div>
+                        <div class="form-field">
+                            <label>Identificación *</label>
+                            <InputText class="form-control" @bind-Value="Formulario.Identificacion" />
+                            <ValidationMessage For="@(() => Formulario.Identificacion)" />
+                        </div>
+                        <div class="form-field">
+                            <label>Fecha de nacimiento</label>
+                            <InputDate class="form-control" @bind-Value="Formulario.FechaNacimiento" />
+                        </div>
+                        <div class="form-field">
+                            <label>Sexo</label>
+                            <InputSelect class="form-control" @bind-Value="Formulario.Sexo">
+                                <option value="">Seleccione...</option>
+                                <option value="Masculino">Masculino</option>
+                                <option value="Femenino">Femenino</option>
+                                <option value="Otro">Otro</option>
+                                @if (!string.IsNullOrWhiteSpace(Formulario.Sexo)
+                                     && Formulario.Sexo is not ("Masculino" or "Femenino" or "Otro"))
+                                {
+                                    <option value="@Formulario.Sexo">@Formulario.Sexo</option>
+                                }
+                            </InputSelect>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="form-section">
+                    <div class="form-section__header">
+                        <h3>Datos de contacto</h3>
+                        <p>Medios para comunicación con el paciente</p>
+                    </div>
+                    <div class="form-grid">
+                        <div class="form-field">
+                            <label>Teléfono</label>
+                            <InputText class="form-control" @bind-Value="Formulario.Telefono" />
+                        </div>
+                        <div class="form-field form-field--span-2">
+                            <label>Correo electrónico</label>
+                            <InputText class="form-control" @bind-Value="Formulario.Correo" />
+                            <ValidationMessage For="@(() => Formulario.Correo)" />
+                        </div>
+                    </div>
+                </div>
+
+                <div class="form-section">
+                    <div class="form-section__header">
+                        <h3>Ubicación</h3>
+                        <p>Dirección de residencia</p>
+                    </div>
+                    <div class="form-grid">
+                        <div class="form-field form-field--span-4">
+                            <label>Dirección</label>
+                            <InputText class="form-control" @bind-Value="Formulario.Direccion" />
+                        </div>
+                    </div>
+                </div>
+
+                <div class="form-actions">
+                    <button class="btn btn--primary" type="submit" disabled="@Guardando">@((Guardando) ? "Guardando..." : (Editando ? "Guardar cambios" : "Registrar paciente"))</button>
+                    <button class="btn btn--ghost" type="button" @onclick="CancelarEdicion" disabled="@Guardando">Cancelar</button>
+                </div>
+            </EditForm>
+        </section>
+
+        <section class="usuarios-card usuarios-card--list">
+            <header class="usuarios-card__header">
+                <div>
+                    <h2>Listado de pacientes</h2>
+                    <p>@ListaPacientes.Count paciente(s) registrados</p>
+                </div>
+                <div class="usuarios-card__header-actions">
+                    <input class="form-control usuarios-search" placeholder="Buscar por nombre, apellido, identificación o correo..." @bind="Filtro" @bind:event="oninput" />
+                </div>
+            </header>
+
+            @if (Cargando)
+            {
+                <p>Cargando pacientes...</p>
+            }
+            else if (!PacientesFiltrados.Any())
+            {
+                <p>No hay pacientes para mostrar.</p>
+            }
+            else
+            {
+                <div class="table-wrapper">
+                    <table class="usuarios-table">
+                        <thead>
+                            <tr>
+                                <th>Paciente</th>
+                                <th>Identificación</th>
+                                <th>Contacto</th>
+                                <th>Edad</th>
+                                <th>Estado</th>
+                                <th class="usuarios-table__actions">Acciones</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @foreach (var paciente in PacientesPagina)
+                            {
+                                <tr>
+                                    <td>
+                                        <div class="usuarios-table__name">@paciente.Nombres @paciente.Apellidos</div>
+                                        <div class="usuarios-table__meta">@(paciente.Direccion ?? "-")</div>
+                                    </td>
+                                    <td>@paciente.Identificacion</td>
+                                    <td>
+                                        <div>@(paciente.Telefono ?? "-")</div>
+                                        <div class="usuarios-table__meta">@(paciente.Correo ?? "-")</div>
+                                    </td>
+                                    <td>@(CalcularEdad(paciente.FechaNacimiento))</td>
+                                    <td><span class="badge @(paciente.Activo ? "badge--success" : "badge--danger")">@(paciente.Activo ? "Activo" : "Inactivo")</span></td>
+                                    <td class="usuarios-table__actions">
+                                        <button class="btn btn--ghost btn--sm" @onclick="() => Editar(paciente)">Editar</button>
+                                        <button class="btn btn--ghost btn--sm" @onclick="() => AbrirAntecedentes(paciente)">Antecedentes</button>
+                                        @if (paciente.Activo)
+                                        {
+                                            <button class="btn btn--ghost btn--sm" @onclick="() => Desactivar(paciente)">Desactivar</button>
+                                        }
+                                        else
+                                        {
+                                            <button class="btn btn--ghost btn--sm" @onclick="() => Activar(paciente)">Activar</button>
+                                        }
+                                    </td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+
+                <DataPagination TotalRegistros="TotalFiltrados"
+                                PaginaActual="_paginacion.PaginaEfectiva(TotalFiltrados)"
+                                TamanoPagina="_paginacion.Tamano"
+                                Singular="paciente"
+                                Plural="pacientes"
+                                OnPaginaCambiada="IrAPagina"
+                                OnTamanoCambiado="CambiarTamanoPagina" />
+            }
+        </section>
+    </div>
+</div>
+
+@if (MostrarAntecedentes && PacienteSeleccionado != null)
+{
+    <div class="modal-backdrop">
+        <div class="modal-dialog modal-dialog--wide">
+            <header class="modal-header">
+                <div class="modal-header__title">
+                    <h2>Antecedentes del paciente</h2>
+                    <p>@PacienteSeleccionado.Nombres @PacienteSeleccionado.Apellidos</p>
+                </div>
+                <button class="modal-close" @onclick="CerrarAntecedentes">×</button>
+            </header>
+            <div class="modal-body modal-body--wide">
+                <div class="antecedente-stats">
+                    <div class="antecedente-stat">
+                        <span>Total registrados</span>
+                        <strong>@Antecedentes.Count</strong>
+                    </div>
+                    <div class="antecedente-stat antecedente-stat--medico">
+                        <span>Médicos</span>
+                        <strong>@ConteoTipo("MEDICO")</strong>
+                    </div>
+                    <div class="antecedente-stat antecedente-stat--odontologico">
+                        <span>Odontológicos</span>
+                        <strong>@ConteoTipo("ODONTOLOGICO")</strong>
+                    </div>
+                    <div class="antecedente-stat antecedente-stat--alergico">
+                        <span>Alérgicos</span>
+                        <strong>@ConteoTipo("ALERGICO")</strong>
+                    </div>
+                </div>
+
+                @if (ConteoTipo("ALERGICO") > 0)
+                {
+                    <div class="antecedente-alerta" role="alert">
+                        <svg class="icon" aria-hidden="true"><use href="#icon-alert"></use></svg>
+                        <div>
+                            <strong>Atención: antecedentes alérgicos</strong>
+                            <span>Este paciente tiene @ConteoTipo("ALERGICO") antecedente(s) alérgico(s). Revísalos antes de indicar cualquier tratamiento.</span>
+                        </div>
+                    </div>
+                }
+
+                <section class="antecedente-form-card">
+                    <header class="antecedente-form-card__header">
+                        <div>
+                            <h3>Agregar antecedente</h3>
+                            <p>Registra antecedentes médicos, odontológicos, alérgicos u otros.</p>
+                        </div>
+                    </header>
+                    <EditForm Model="NuevoAntecedente" OnValidSubmit="GuardarAntecedenteAsync">
+                        <DataAnnotationsValidator />
+                        <div class="antecedente-form-grid">
+                            <div class="form-field">
+                                <label>Tipo *</label>
+                                <InputSelect class="form-control" @bind-Value="NuevoAntecedente.Tipo">
+                                    <option value="">Seleccione un tipo...</option>
+                                    <option value="MEDICO">Médico</option>
+                                    <option value="ODONTOLOGICO">Odontológico</option>
+                                    <option value="ALERGICO">Alérgico</option>
+                                    <option value="OTRO">Otro</option>
+                                </InputSelect>
+                                <ValidationMessage For="@(() => NuevoAntecedente.Tipo)" />
+                            </div>
+                            <div class="form-field antecedente-form-grid__desc">
+                                <label>Descripción *</label>
+                                <InputText class="form-control" @bind-Value="NuevoAntecedente.Descripcion" placeholder="Ej. Alergia a la penicilina" />
+                                <ValidationMessage For="@(() => NuevoAntecedente.Descripcion)" />
+                            </div>
+                            <div class="form-field antecedente-form-grid__obs">
+                                <label>Observaciones</label>
+                                <InputTextArea class="form-control" @bind-Value="NuevoAntecedente.Observaciones" rows="3" placeholder="Detalles adicionales, tratamiento indicado, etc." />
+                            </div>
+                        </div>
+                        <div class="antecedente-form-actions">
+                            <span class="antecedente-form-hint">El antecedente quedará en el historial clínico del paciente.</span>
+                            <button class="btn btn--primary" type="submit" disabled="@GuardandoAntecedente">
+                                @((GuardandoAntecedente) ? "Guardando..." : "Agregar antecedente")
+                            </button>
+                        </div>
+                    </EditForm>
+                </section>
+
+                <section class="antecedente-history">
+                    <div class="antecedente-history__header">
+                        <div>
+                            <h3>Historial clínico</h3>
+                            <p>@Antecedentes.Count registro(s) · más recientes primero</p>
+                        </div>
+                    </div>
+
+                    @if (!Antecedentes.Any())
+                    {
+                        <div class="empty-state empty-state--compact">
+                            <strong>Sin antecedentes registrados</strong>
+                            <span>Agrega el primero usando el formulario de arriba.</span>
+                        </div>
+                    }
+                    else
+                    {
+                        <div class="antecedente-timeline">
+                            @foreach (var ant in Antecedentes.OrderByDescending(a => a.FechaRegistro))
+                            {
+                                <article class="antecedente-item @ClaseTipoAntecedente(ant.Tipo)">
+                                    <span class="antecedente-item__marker"></span>
+                                    <div class="antecedente-item__content">
+                                        <header class="antecedente-item__head">
+                                            <span class="antecedente-tag">@EtiquetaTipoAntecedente(ant.Tipo)</span>
+                                            <time>@ant.FechaRegistro.ToString("dd/MM/yyyy · HH:mm")</time>
+                                        </header>
+                                        <p class="antecedente-item__desc">@ant.Descripcion</p>
+                                        @if (!string.IsNullOrWhiteSpace(ant.Observaciones))
+                                        {
+                                            <div class="antecedente-item__obs">
+                                                <span>Observaciones</span>
+                                                <p>@ant.Observaciones</p>
+                                            </div>
+                                        }
+                                    </div>
+                                </article>
+                            }
+                        </div>
+                    }
+                </section>
+            </div>
+            <footer class="modal-footer">
+                <button class="btn btn--ghost" @onclick="CerrarAntecedentes">Cerrar</button>
+            </footer>
+        </div>
+    </div>
+}
+
+@code {
+    private List<PacienteDto> ListaPacientes = new();
+    private bool Cargando = true;
+    private bool Guardando = false;
+    private bool Editando = false;
+    private int? IdPacienteEditando;
+
+    private PacienteForm Formulario = new();
+    private readonly Paginacion _paginacion = new();
+    private string _filtro = string.Empty;
+
+    private string Filtro
+    {
+        get => _filtro;
+        set
+        {
+            _filtro = value;
+            _paginacion.Reiniciar();
+        }
+    }
+
+    private bool MostrarAntecedentes = false;
+    private PacienteDto? PacienteSeleccionado;
+    private List<AntecedenteDto> Antecedentes = new();
+    private CreacionAntecedenteDto NuevoAntecedente = new();
+    private bool GuardandoAntecedente = false;
+
+    private IEnumerable<PacienteDto> PacientesFiltrados => string.IsNullOrWhiteSpace(Filtro)
+        ? ListaPacientes
+        : ListaPacientes.Where(p => ($"{p.Nombres} {p.Apellidos} {p.Identificacion} {p.Correo}").Contains(Filtro, StringComparison.OrdinalIgnoreCase));
+
+    private List<PacienteDto> PacientesPagina => _paginacion.Aplicar(PacientesFiltrados).ToList();
+
+    private int TotalFiltrados => PacientesFiltrados.Count();
+
+    private void IrAPagina(int pagina) => _paginacion.IrA(pagina, TotalFiltrados);
+
+    private void CambiarTamanoPagina(int tamano) => _paginacion.CambiarTamano(tamano);
+
+    protected override async Task OnInitializedAsync()
+    {
+        await CargarAsync();
+    }
+
+    private async Task CargarAsync()
+    {
+        try
+        {
+            Cargando = true;
+            ListaPacientes = (await PacientesApi.ObtenerTodosAsync()).ToList();
+        }
+        catch (Exception ex)
+        {
+            ToastService.Mostrar("Error", $"Error al cargar pacientes: {ex.Message}", ToastTipo.Error);
+        }
+        finally
+        {
+            Cargando = false;
+        }
+    }
+
+    private async Task GuardarAsync()
+    {
+        try
+        {
+            Guardando = true;
+            if (Editando && IdPacienteEditando.HasValue)
+            {
+                var dto = new ActualizacionPacienteDto
+                {
+                    Nombres = Formulario.Nombres,
+                    Apellidos = Formulario.Apellidos,
+                    Identificacion = Formulario.Identificacion,
+                    FechaNacimiento = Formulario.FechaNacimiento,
+                    Sexo = Formulario.Sexo,
+                    Telefono = Formulario.Telefono,
+                    Correo = Formulario.Correo,
+                    Direccion = Formulario.Direccion
+                };
+                await PacientesApi.ActualizarAsync(IdPacienteEditando.Value, dto);
+                ToastService.Mostrar("Éxito", "Paciente actualizado correctamente.", ToastTipo.Exito);
+            }
+            else
+            {
+                var dto = new CreacionPacienteDto
+                {
+                    Nombres = Formulario.Nombres,
+                    Apellidos = Formulario.Apellidos,
+                    Identificacion = Formulario.Identificacion,
+                    FechaNacimiento = Formulario.FechaNacimiento,
+                    Sexo = Formulario.Sexo,
+                    Telefono = Formulario.Telefono,
+                    Correo = Formulario.Correo,
+                    Direccion = Formulario.Direccion
+                };
+                await PacientesApi.CrearAsync(dto);
+                ToastService.Mostrar("Éxito", "Paciente registrado correctamente.", ToastTipo.Exito);
+            }
+
+            CancelarEdicion();
+            await CargarAsync();
+        }
+        catch (Exception ex)
+        {
+            ToastService.Mostrar("Error", ex.Message, ToastTipo.Error);
+        }
+        finally
+        {
+            Guardando = false;
+        }
+    }
+
+    private void Editar(PacienteDto paciente)
+    {
+        Editando = true;
+        IdPacienteEditando = paciente.IdPaciente;
+        Formulario = new PacienteForm
+        {
+            Nombres = paciente.Nombres,
+            Apellidos = paciente.Apellidos,
+            Identificacion = paciente.Identificacion,
+            FechaNacimiento = paciente.FechaNacimiento,
+            Sexo = paciente.Sexo,
+            Telefono = paciente.Telefono,
+            Correo = paciente.Correo,
+            Direccion = paciente.Direccion
+        };
+    }
+
+    private void CancelarEdicion()
+    {
+        Editando = false;
+        IdPacienteEditando = null;
+        Formulario = new PacienteForm();
+    }
+
+    private async Task Desactivar(PacienteDto paciente)
+    {
+        try
+        {
+            await PacientesApi.DesactivarAsync(paciente.IdPaciente);
+            ToastService.Mostrar("Éxito", "Paciente desactivado correctamente.", ToastTipo.Exito);
+            await CargarAsync();
+        }
+        catch (Exception ex)
+        {
+            ToastService.Mostrar("Error", ex.Message, ToastTipo.Error);
+        }
+    }
+
+    private async Task Activar(PacienteDto paciente)
+    {
+        try
+        {
+            await PacientesApi.ActivarAsync(paciente.IdPaciente);
+            ToastService.Mostrar("Éxito", "Paciente activado correctamente.", ToastTipo.Exito);
+            await CargarAsync();
+        }
+        catch (Exception ex)
+        {
+            ToastService.Mostrar("Error", ex.Message, ToastTipo.Error);
+        }
+    }
+
+    private async Task AbrirAntecedentes(PacienteDto paciente)
+    {
+        PacienteSeleccionado = paciente;
+        NuevoAntecedente = new CreacionAntecedenteDto();
+        await CargarAntecedentesAsync();
+        MostrarAntecedentes = true;
+    }
+
+    private async Task CargarAntecedentesAsync()
+    {
+        if (PacienteSeleccionado == null) return;
+        try
+        {
+            Antecedentes = (await PacientesApi.ObtenerAntecedentesAsync(PacienteSeleccionado.IdPaciente)).ToList();
+        }
+        catch (Exception ex)
+        {
+            ToastService.Mostrar("Error", ex.Message, ToastTipo.Error);
+        }
+    }
+
+    private async Task GuardarAntecedenteAsync()
+    {
+        if (PacienteSeleccionado == null) return;
+        try
+        {
+            GuardandoAntecedente = true;
+            await PacientesApi.CrearAntecedenteAsync(PacienteSeleccionado.IdPaciente, NuevoAntecedente);
+            ToastService.Mostrar("Éxito", "Antecedente registrado correctamente.", ToastTipo.Exito);
+            NuevoAntecedente = new CreacionAntecedenteDto();
+            await CargarAntecedentesAsync();
+        }
+        catch (Exception ex)
+        {
+            ToastService.Mostrar("Error", ex.Message, ToastTipo.Error);
+        }
+        finally
+        {
+            GuardandoAntecedente = false;
+        }
+    }
+
+    private void CerrarAntecedentes()
+    {
+        MostrarAntecedentes = false;
+        PacienteSeleccionado = null;
+        Antecedentes.Clear();
+    }
+
+    private int ConteoTipo(string tipo) =>
+        Antecedentes.Count(a => string.Equals(a.Tipo, tipo, StringComparison.OrdinalIgnoreCase));
+
+    private static string EtiquetaTipoAntecedente(string? tipo) => (tipo ?? string.Empty).ToUpperInvariant() switch
+    {
+        "MEDICO" => "Médico",
+        "ODONTOLOGICO" => "Odontológico",
+        "ALERGICO" => "Alérgico",
+        "OTRO" => "Otro",
+        _ => string.IsNullOrWhiteSpace(tipo) ? "Sin tipo" : tipo
+    };
+
+    private static string ClaseTipoAntecedente(string? tipo) => (tipo ?? string.Empty).ToUpperInvariant() switch
+    {
+        "MEDICO" => "antecedente-item--medico",
+        "ODONTOLOGICO" => "antecedente-item--odontologico",
+        "ALERGICO" => "antecedente-item--alergico",
+        _ => "antecedente-item--otro"
+    };
+
+    private static string CalcularEdad(DateTime? fechaNacimiento)
+    {
+        if (!fechaNacimiento.HasValue)
+        {
+            return "-";
+        }
+
+        var hoy = DateTime.Today;
+        var edad = hoy.Year - fechaNacimiento.Value.Year;
+        if (fechaNacimiento.Value.Date > hoy.AddYears(-edad))
+        {
+            edad--;
+        }
+
+        return edad >= 0 ? $"{edad} años" : "-";
+    }
+
+    public class PacienteForm
+    {
+        [Required(ErrorMessage = "Los nombres son obligatorios.")]
+        [StringLength(100, ErrorMessage = "Los nombres no pueden superar los 100 caracteres.")]
+        public string Nombres { get; set; } = string.Empty;
+
+        [Required(ErrorMessage = "Los apellidos son obligatorios.")]
+        [StringLength(100, ErrorMessage = "Los apellidos no pueden superar los 100 caracteres.")]
+        public string Apellidos { get; set; } = string.Empty;
+
+        [Required(ErrorMessage = "La identificación es obligatoria.")]
+        [StringLength(20, ErrorMessage = "La identificación no puede superar los 20 caracteres.")]
+        public string Identificacion { get; set; } = string.Empty;
+
+        public DateTime? FechaNacimiento { get; set; }
+
+        [StringLength(10, ErrorMessage = "El sexo no puede superar los 10 caracteres.")]
+        public string? Sexo { get; set; }
+
+        [StringLength(20, ErrorMessage = "El teléfono no puede superar los 20 caracteres.")]
+        public string? Telefono { get; set; }
+
+        [EmailAddress(ErrorMessage = "El formato del correo electrónico no es válido.")]
+        [StringLength(150, ErrorMessage = "El correo no puede superar los 150 caracteres.")]
+        public string? Correo { get; set; }
+
+        [StringLength(250, ErrorMessage = "La dirección no puede superar los 250 caracteres.")]
+        public string? Direccion { get; set; }
+    }
+}

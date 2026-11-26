@@ -1,0 +1,285 @@
+@using GestionOdontologica.Frontend.Models
+@inject ProductosApiService Api
+@inject CategoriasApiService CategoriasApi
+@inject ToastService Toasts
+
+<section class="card form-card @(EsModoEdicion ? "form-card--editing" : string.Empty)" aria-labelledby="producto-form-title">
+    <div class="card__header">
+        <div class="icon-tile @(EsModoEdicion ? "icon-tile--accent" : "icon-tile--primary")" aria-hidden="true">
+            <svg class="icon"><use href="@(EsModoEdicion ? "#icon-edit" : "#icon-plus")"></use></svg>
+        </div>
+        <div class="card-header-copy">
+            <h2 id="producto-form-title">@(EsModoEdicion ? "Editar producto" : "Agregar producto")</h2>
+            <p>@(EsModoEdicion ? $"Modificando {ProductoAEditar?.Nombre ?? "producto"}." : "Registra un insumo o producto para el inventario.")</p>
+        </div>
+    </div>
+
+    @if (EsModoEdicion)
+    {
+        <div class="editing-banner" role="status">
+            <span>Editando <strong>@ProductoAEditar?.Codigo</strong></span>
+            <button type="button" class="btn-link" @onclick="CancelarAsync">Descartar cambios</button>
+        </div>
+    }
+
+    @if (_cargandoCategorias)
+    {
+        <div class="table-state">
+            <span class="auth-boot__spinner"></span>
+            <p>Cargando categorías...</p>
+        </div>
+    }
+    else
+    {
+        <EditForm Model="_modelo" OnValidSubmit="GuardarAsync" class="usuario-form">
+            <DataAnnotationsValidator />
+            <div class="form-row">
+                <div class="field">
+                    <label for="productoCodigo">Código</label>
+                    <input id="productoCodigo"
+                           type="text"
+                           value="@(EsModoEdicion ? _modelo.Codigo : _codigoSugerido)"
+                           placeholder="Se generará automáticamente"
+                           readonly
+                           aria-readonly="true" />
+                    <span class="field-hint">
+                        @(EsModoEdicion
+                            ? "El código se asigna automáticamente y no se puede modificar."
+                            : "Se genera automáticamente y de forma consecutiva.")
+                    </span>
+                </div>
+                <div class="field">
+                    <label for="productoCategoria">Categoría</label>
+                    <InputSelect id="productoCategoria" @bind-Value="_modelo.IdCategoria">
+                        <option value="0">Selecciona una categoría</option>
+                        @foreach (var categoria in _categorias)
+                        {
+                            <option value="@categoria.IdCategoria">@categoria.Nombre</option>
+                        }
+                    </InputSelect>
+                    <ValidationMessage For="() => _modelo.IdCategoria" />
+                </div>
+            </div>
+
+            <div class="field">
+                <label for="productoNombre">Nombre</label>
+                <InputText id="productoNombre" @bind-Value="_modelo.Nombre" maxlength="150" />
+                <ValidationMessage For="() => _modelo.Nombre" />
+            </div>
+
+            <div class="field">
+                <label for="productoDescripcion">Descripción <span class="label-optional">(opcional)</span></label>
+                <InputTextArea id="productoDescripcion" @bind-Value="_modelo.Descripcion" maxlength="255" rows="3" />
+                <ValidationMessage For="() => _modelo.Descripcion" />
+            </div>
+
+            <div class="form-row">
+                <div class="field">
+                    <label for="productoUnidad">Unidad de medida</label>
+                    <InputText id="productoUnidad" @bind-Value="_modelo.UnidadMedida" maxlength="30" placeholder="Ej. caja, unidad, frasco" />
+                    <ValidationMessage For="() => _modelo.UnidadMedida" />
+                </div>
+                <div class="field">
+                    <label for="productoMinimo">Stock mínimo</label>
+                    <InputNumber id="productoMinimo" @bind-Value="_modelo.StockMinimo" min="0" />
+                    <ValidationMessage For="() => _modelo.StockMinimo" />
+                </div>
+            </div>
+
+            <div class="form-row">
+                <div class="field">
+                    <label for="productoCosto">Precio de costo</label>
+                    <InputNumber id="productoCosto" @bind-Value="_modelo.PrecioCosto" min="0" step="0.01" />
+                    <ValidationMessage For="() => _modelo.PrecioCosto" />
+                </div>
+                <div class="field">
+                    <label for="productoVenta">Precio de venta</label>
+                    <InputNumber id="productoVenta" @bind-Value="_modelo.PrecioVenta" min="0" step="0.01" />
+                    <ValidationMessage For="() => _modelo.PrecioVenta" />
+                </div>
+            </div>
+
+            <label class="field-checkbox">
+                <InputCheckbox @bind-Value="_modelo.RequiereCaducidad" /> Requiere control de caducidad
+            </label>
+
+            @if (EsModoEdicion)
+            {
+                <div class="field">
+                    <label for="productoActivo">Estado</label>
+                    <div class="status-toggle-pill-group" role="radiogroup" aria-label="Estado del producto">
+                        <button type="button"
+                                class="status-pill-btn @(_activo ? "is-active" : "")"
+                                @onclick="() => _activo = true">
+                            <span class="status-dot status-dot--active"></span>
+                            <span>Activo</span>
+                        </button>
+                        <button type="button"
+                                class="status-pill-btn @(!_activo ? "is-inactive" : "")"
+                                @onclick="() => _activo = false">
+                            <span class="status-dot status-dot--inactive"></span>
+                            <span>Inactivo</span>
+                        </button>
+                    </div>
+                </div>
+            }
+
+            @if (_error is not null)
+            {
+                <div class="field-error" role="alert">@_error</div>
+            }
+
+            <div class="form-actions-row">
+                <button type="submit" class="button button--primary" disabled="@_enviando">
+                    @(_enviando ? "Guardando..." : (EsModoEdicion ? "Guardar cambios" : "Agregar producto"))
+                </button>
+                @if (EsModoEdicion)
+                {
+                    <button type="button" class="button button--secondary" @onclick="CancelarAsync" disabled="@_enviando">Cancelar</button>
+                }
+            </div>
+        </EditForm>
+    }
+</section>
+
+@code {
+    [Parameter] public ProductoDto? ProductoAEditar { get; set; }
+    [Parameter] public EventCallback<ProductoDto> OnCreado { get; set; }
+    [Parameter] public EventCallback<ProductoDto> OnActualizado { get; set; }
+    [Parameter] public EventCallback OnCancelarEdicion { get; set; }
+
+    private ProductoFormModel _modelo = new();
+    private List<CategoriaDto> _categorias = new();
+    private bool _activo = true;
+    private bool _enviando;
+    private bool _cargandoCategorias = true;
+    private string _codigoSugerido = string.Empty;
+    private string? _error;
+    private int? _idInicializado = int.MinValue;
+    private bool EsModoEdicion => ProductoAEditar is not null;
+
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            _categorias = (await CategoriasApi.ListarAsync()).ToList();
+        }
+        catch (ApiException ex)
+        {
+            _error = ex.Message;
+        }
+        finally
+        {
+            _cargandoCategorias = false;
+        }
+    }
+
+    protected override async Task OnParametersSetAsync()
+    {
+        var id = ProductoAEditar?.IdProducto;
+        if (id == _idInicializado)
+        {
+            return;
+        }
+
+        _idInicializado = id;
+        _error = null;
+        if (ProductoAEditar is null)
+        {
+            _modelo = new ProductoFormModel();
+            _activo = true;
+            await CargarSiguienteCodigoAsync();
+            return;
+        }
+
+        _modelo = new ProductoFormModel
+        {
+            IdCategoria = ProductoAEditar.IdCategoria,
+            Codigo = ProductoAEditar.Codigo,
+            Nombre = ProductoAEditar.Nombre,
+            Descripcion = ProductoAEditar.Descripcion,
+            UnidadMedida = ProductoAEditar.UnidadMedida,
+            StockMinimo = ProductoAEditar.StockMinimo,
+            PrecioCosto = ProductoAEditar.PrecioCosto,
+            PrecioVenta = ProductoAEditar.PrecioVenta,
+            RequiereCaducidad = ProductoAEditar.RequiereCaducidad,
+            EsEdicion = true
+        };
+        _activo = ProductoAEditar.Activo;
+    }
+
+    private async Task GuardarAsync()
+    {
+        if (EsModoEdicion && string.IsNullOrWhiteSpace(_modelo.Codigo))
+        {
+            _error = "El código es obligatorio.";
+            return;
+        }
+
+        _enviando = true;
+        _error = null;
+        try
+        {
+            if (EsModoEdicion)
+            {
+                var actualizado = await Api.ActualizarAsync(ProductoAEditar!.IdProducto, new ActualizacionProductoDto
+                {
+                    IdCategoria = _modelo.IdCategoria,
+                    Codigo = _modelo.Codigo.Trim(),
+                    Nombre = _modelo.Nombre.Trim(),
+                    Descripcion = _modelo.Descripcion?.Trim(),
+                    UnidadMedida = _modelo.UnidadMedida.Trim(),
+                    StockMinimo = _modelo.StockMinimo,
+                    PrecioCosto = _modelo.PrecioCosto,
+                    PrecioVenta = _modelo.PrecioVenta,
+                    RequiereCaducidad = _modelo.RequiereCaducidad,
+                    Activo = _activo
+                });
+                Toasts.Mostrar("Producto actualizado", "Los cambios se guardaron correctamente.", ToastTipo.Exito);
+                await OnActualizado.InvokeAsync(actualizado);
+            }
+            else
+            {
+                var creado = await Api.CrearAsync(new CreacionProductoDto
+                {
+                    IdCategoria = _modelo.IdCategoria,
+                    Nombre = _modelo.Nombre.Trim(),
+                    Descripcion = _modelo.Descripcion?.Trim(),
+                    UnidadMedida = _modelo.UnidadMedida.Trim(),
+                    StockMinimo = _modelo.StockMinimo,
+                    PrecioCosto = _modelo.PrecioCosto,
+                    PrecioVenta = _modelo.PrecioVenta,
+                    RequiereCaducidad = _modelo.RequiereCaducidad
+                });
+                Toasts.Mostrar("Producto creado", "El producto se agregó al inventario.", ToastTipo.Exito);
+                _modelo = new ProductoFormModel();
+                _activo = true;
+                await CargarSiguienteCodigoAsync();
+                await OnCreado.InvokeAsync(creado);
+            }
+        }
+        catch (ApiException ex)
+        {
+            _error = ex.Message;
+        }
+        finally
+        {
+            _enviando = false;
+        }
+    }
+
+    private Task CancelarAsync() => OnCancelarEdicion.InvokeAsync();
+
+    private async Task CargarSiguienteCodigoAsync()
+    {
+        try
+        {
+            var siguiente = await Api.ObtenerSiguienteCodigoAsync();
+            _codigoSugerido = siguiente.Codigo;
+        }
+        catch (ApiException)
+        {
+            _codigoSugerido = string.Empty;
+        }
+    }
+}

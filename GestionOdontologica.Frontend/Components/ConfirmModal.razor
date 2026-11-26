@@ -1,0 +1,84 @@
+@if (Visible)
+{
+    <div class="modal-backdrop" @onclick="CancelarAsync" aria-modal="true" role="dialog" aria-labelledby="confirm-modal-title">
+        <div class="modal-dialog modal-dialog--sm" @onclick:stopPropagation="true">
+            <header class="modal-header">
+                <div class="modal-header__title">
+                    <div class="icon-tile @(EsPeligro ? "icon-tile--danger" : "icon-tile--primary")" aria-hidden="true">
+                        <svg class="icon"><use href="@Icono"></use></svg>
+                    </div>
+                    <div>
+                        <h2 id="confirm-modal-title">@Titulo</h2>
+                    </div>
+                </div>
+                <button type="button" class="icon-button modal-close" aria-label="Cerrar ventana" @onclick="CancelarAsync" disabled="@Cargando">
+                    <svg class="icon"><use href="#icon-x"></use></svg>
+                </button>
+            </header>
+
+            <div class="modal-body">
+                <p class="confirm-message">@Mensaje</p>
+                @if (!string.IsNullOrWhiteSpace(Detalle))
+                {
+                    <p class="confirm-detail">@Detalle</p>
+                }
+            </div>
+
+            <footer class="modal-footer">
+                <button type="button" class="button button--secondary" @onclick="CancelarAsync" disabled="@Cargando">
+                    @BotonCancelar
+                </button>
+                <button type="button"
+                        class="button @(EsPeligro ? "button--danger" : "button--primary")"
+                        @onclick="ConfirmarAsync"
+                        disabled="@Cargando"
+                        aria-busy="@(Cargando ? "true" : "false")">
+                    @if (Cargando)
+                    {
+                        <span class="button__spinner" aria-hidden="true"></span>
+                    }
+                    <span class="button__label">@BotonConfirmar</span>
+                </button>
+            </footer>
+        </div>
+    </div>
+}
+
+@code {
+    [Parameter]
+    public bool Visible { get; set; }
+
+    [Parameter]
+    public string Titulo { get; set; } = "¿Está seguro?";
+
+    [Parameter]
+    public string Mensaje { get; set; } = string.Empty;
+
+    [Parameter]
+    public string? Detalle { get; set; }
+
+    [Parameter]
+    public string BotonConfirmar { get; set; } = "Confirmar";
+
+    [Parameter]
+    public string BotonCancelar { get; set; } = "Cancelar";
+
+    [Parameter]
+    public bool EsPeligro { get; set; }
+
+    [Parameter]
+    public string Icono { get; set; } = "#icon-alert";
+
+    [Parameter]
+    public bool Cargando { get; set; }
+
+    [Parameter]
+    public EventCallback OnConfirmar { get; set; }
+
+    [Parameter]
+    public EventCallback OnCancelar { get; set; }
+
+    private Task ConfirmarAsync() => OnConfirmar.InvokeAsync();
+
+    private Task CancelarAsync() => OnCancelar.InvokeAsync();
+}

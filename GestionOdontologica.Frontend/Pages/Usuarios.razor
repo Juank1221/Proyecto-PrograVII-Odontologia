@@ -1,0 +1,335 @@
+@page "/usuarios"
+@attribute [Authorize]
+@implements IDisposable
+@inject UsuariosApiService Api
+@inject ToastService Toasts
+@inject ApiStatusService ApiStatus
+
+<PageTitle>Usuarios | OdontoCare</PageTitle>
+
+<div class="page">
+    <section class="page-heading" aria-labelledby="page-title">
+        <div class="page-heading__copy">
+            <h1 id="page-title">Usuarios</h1>
+            <p>Administra, actualiza y controla los accesos del personal clínico y administrativo.</p>
+        </div>
+
+        <div class="heading-meta" aria-label="Resumen">
+            <div class="meta-card">
+                <span>Total usuarios</span>
+                <strong>@ConteoTotal</strong>
+            </div>
+            <div class="meta-card">
+                <span>Activos</span>
+                <strong class="text-success">@ConteoActivos</strong>
+            </div>
+            <div class="meta-card">
+                <span>Estado API</span>
+                <strong class="meta-status @ApiStatus.ClaseCss">
+                    <span class="api-dot"></span>
+                    <span>@ApiStatus.TextoMeta</span>
+                </strong>
+            </div>
+        </div>
+    </section>
+
+    <div class="workspace-grid">
+        <!-- Formulario unificado de Alta y Edición -->
+        <UsuarioForm UsuarioAEditar="_usuarioAEditar"
+                     OnCreado="AlCrearUsuario"
+                     OnActualizado="AlActualizarUsuario"
+                     OnCancelarEdicion="CancelarEdicion" />
+
+        <!-- Tabla con Filtros y Acciones Profesionales -->
+        <UsuariosTable Usuarios="_usuarios"
+                       Cargando="_cargando"
+                       Error="@_error"
+                       IdUsuarioEditando="_usuarioAEditar?.IdUsuario"
+                       OnEditar="SeleccionarParaEditar"
+                       OnDesactivar="SolicitarDesactivacion"
+                       OnReactivar="SolicitarReactivacion"
+                       OnReintentar="CargarUsuariosAsync"
+                       OnRefrescar="CargarUsuariosAsync" />
+    </div>
+
+    <!-- Diálogo Modal Flotante de Confirmación (Baja y Activación) -->
+    <ConfirmModal Visible="_confirmModalVisible"
+                  Titulo="@_confirmTitulo"
+                  Mensaje="@_confirmMensaje"
+                  Detalle="@_confirmDetalle"
+                  BotonConfirmar="@_confirmBoton"
+                  EsPeligro="@_confirmEsPeligro"
+                  Icono="@_confirmIcono"
+                  Cargando="_confirmCargando"
+                  OnConfirmar="EjecutarConfirmacionAsync"
+                  OnCancelar="CerrarConfirmacion" />
+</div>
+
+@code {
+    private enum AccionConfirmacion
+    {
+        Ninguna,
+        Desactivar,
+        Reactivar
+    }
+
+    private readonly List<UsuarioVista> _usuarios = new();
+
+    private UsuarioDto? _usuarioAEditar;
+
+    private bool _confirmModalVisible;
+    private AccionConfirmacion _confirmAccion = AccionConfirmacion.Ninguna;
+    private UsuarioDto? _confirmUsuario;
+    private string _confirmTitulo = "¿Está seguro?";
+    private string _confirmMensaje = string.Empty;
+    private string? _confirmDetalle;
+    private string _confirmBoton = "Confirmar";
+    private bool _confirmEsPeligro;
+    private string _confirmIcono = "#icon-alert";
+    private bool _confirmCargando;
+
+    private CancellationTokenSource? _cts;
+    private bool _cargando;
+    private bool _disposed;
+    private string? _error;
+    private int _secuencia;
+
+    private string ConteoTotal => _cargando || _error is not null
+        ? "—"
+        : _usuarios.Count.ToString();
+
+    private string ConteoActivos => _cargando || _error is not null
+        ? "—"
+        : _usuarios.Count(u => u.Activo).ToString();
+
+    protected override async Task OnInitializedAsync()
+    {
+        await CargarUsuariosAsync();
+    }
+
+    public void Dispose()
+    {
+        _disposed = true;
+        _secuencia++;
+        _cts?.Cancel();
+        _cts?.Dispose();
+
+        if (ApiStatus.Estado == EstadoApi.Cargando)
+        {
+            ApiStatus.Establecer(EstadoApi.Desconocido);
+        }
+    }
+
+    private async Task CargarUsuariosAsync()
+    {
+        if (_disposed)
+        {
+            return;
+        }
+
+        var secuencia = ++_secuencia;
+
+        _cts?.Cancel();
+        _cts?.Dispose();
+        _cts = new CancellationTokenSource();
+        var cancellationToken = _cts.Token;
+
+        _cargando = true;
+        _error = null;
+        ApiStatus.Establecer(EstadoApi.Cargando);
+        StateHasChanged();
+
+        try
+        {
+            var usuarios = await Api.ListarAsync(cancellationToken);
+
+            if (_disposed || secuencia != _secuencia)
+            {
+                return;
+            }
+
+            var vistas = new List<UsuarioVista>(usuarios.Count);
+
+            foreach (var usuario in usuarios)
+            {
+                vistas.Add(new UsuarioVista(usuario));
+            }
+
+            if (_disposed || secuencia != _secuencia)
+            {
+                return;
+            }
+
+            _usuarios.Clear();
+            _usuarios.AddRange(vistas);
+            ApiStatus.Establecer(EstadoApi.EnLinea);
+        }
+        catch (OperationCanceledException)
+        {
+            return;
+        }
+        catch (ApiException ex)
+        {
+            if (_disposed || secuencia != _secuencia)
+            {
+                return;
+            }
+
+            _usuarios.Clear();
+            _error = ex.Message;
+            ApiStatus.Establecer(ex.Status == 0 ? EstadoApi.SinConexion : EstadoApi.Error);
+
+            Toasts.Mostrar(
+                ex.Status == 0 ? "Sin conexión con la API" : "La API respondió con un error",
+                ex.Message,
+                ToastTipo.Error,
+                6500);
+        }
+        finally
+        {
+            if (!_disposed && secuencia == _secuencia)
+            {
+                _cargando = false;
+                StateHasChanged();
+            }
+        }
+    }
+
+    private Task AlCrearUsuario(UsuarioDto usuario)
+    {
+        var nombre = !string.IsNullOrWhiteSpace(usuario.NombreCompleto)
+            ? usuario.NombreCompleto
+            : usuario.NombreUsuario;
+
+        var rol = string.IsNullOrWhiteSpace(usuario.Rol) ? "sin rol" : usuario.Rol;
+
+        Toasts.Mostrar(
+            "Usuario agregado",
+            $"{nombre} fue registrado exitosamente como {rol}.",
+            ToastTipo.Exito);
+
+        return CargarUsuariosAsync();
+    }
+
+    private Task AlActualizarUsuario(UsuarioDto usuario)
+    {
+        var nombre = !string.IsNullOrWhiteSpace(usuario.NombreCompleto)
+            ? usuario.NombreCompleto
+            : usuario.NombreUsuario;
+
+        Toasts.Mostrar(
+            "Usuario modificado",
+            $"{nombre} fue actualizado correctamente.",
+            ToastTipo.Exito);
+
+        _usuarioAEditar = null;
+        return CargarUsuariosAsync();
+    }
+
+    private void SeleccionarParaEditar(UsuarioDto usuario)
+    {
+        _usuarioAEditar = usuario;
+    }
+
+    private void CancelarEdicion()
+    {
+        _usuarioAEditar = null;
+    }
+
+    private void SolicitarDesactivacion(UsuarioDto usuario)
+    {
+        if (RolesProtegidos.EsAdministrador(usuario.Rol))
+        {
+            Toasts.Mostrar(
+                "Usuario protegido",
+                "El usuario Administrador no puede desactivarse ni eliminarse. Esta regla evita dejar el sistema sin acceso administrativo.",
+                ToastTipo.Error);
+            return;
+        }
+
+        _confirmUsuario = usuario;
+        _confirmAccion = AccionConfirmacion.Desactivar;
+        _confirmTitulo = "¿Eliminar usuario?";
+        _confirmMensaje = $"¿Está seguro de que desea dar de baja a {usuario.NombreCompleto} (@{usuario.NombreUsuario})?";
+        _confirmDetalle = "El usuario perderá el acceso al sistema. El registro se conserva en la base de datos y podrá ser reactivado en cualquier momento.";
+        _confirmBoton = "Confirmar eliminación";
+        _confirmEsPeligro = true;
+        _confirmIcono = "#icon-trash";
+        _confirmModalVisible = true;
+    }
+
+    private void SolicitarReactivacion(UsuarioDto usuario)
+    {
+        _confirmUsuario = usuario;
+        _confirmAccion = AccionConfirmacion.Reactivar;
+        _confirmTitulo = "¿Activar usuario?";
+        _confirmMensaje = $"¿Desea restaurar el acceso para {usuario.NombreCompleto} (@{usuario.NombreUsuario})?";
+        _confirmDetalle = "El usuario podrá ingresar nuevamente al sistema con el rol asignado.";
+        _confirmBoton = "Activar usuario";
+        _confirmEsPeligro = false;
+        _confirmIcono = "#icon-user-check";
+        _confirmModalVisible = true;
+    }
+
+    private void CerrarConfirmacion()
+    {
+        if (_confirmCargando) return;
+        _confirmModalVisible = false;
+        _confirmUsuario = null;
+        _confirmAccion = AccionConfirmacion.Ninguna;
+    }
+
+    private async Task EjecutarConfirmacionAsync()
+    {
+        if (_confirmUsuario is null || _confirmAccion == AccionConfirmacion.Ninguna) return;
+
+        // Guardamos los datos antes de limpiar el estado del modal.
+        var accion = _confirmAccion;
+        var usuario = _confirmUsuario;
+
+        _confirmCargando = true;
+        StateHasChanged();
+
+        try
+        {
+            if (accion == AccionConfirmacion.Desactivar)
+            {
+                await Api.DesactivarAsync(usuario.IdUsuario);
+                Toasts.Mostrar(
+                    "Usuario desactivado",
+                    $"{usuario.NombreCompleto} fue dado de baja correctamente.",
+                    ToastTipo.Info);
+            }
+            else if (accion == AccionConfirmacion.Reactivar)
+            {
+                await Api.ReactivarAsync(usuario.IdUsuario);
+                Toasts.Mostrar(
+                    "Usuario reactivado",
+                    $"{usuario.NombreCompleto} fue reactivado con éxito.",
+                    ToastTipo.Exito);
+            }
+
+            _confirmModalVisible = false;
+            _confirmUsuario = null;
+            _confirmAccion = AccionConfirmacion.Ninguna;
+
+            // Si se dio de baja al usuario que se estaba editando, salir del modo edición.
+            if (accion == AccionConfirmacion.Desactivar
+                && _usuarioAEditar?.IdUsuario == usuario.IdUsuario)
+            {
+                _usuarioAEditar = null;
+            }
+
+            await CargarUsuariosAsync();
+        }
+        catch (ApiException ex)
+        {
+            Toasts.Mostrar("Error", ex.Message, ToastTipo.Error);
+        }
+        finally
+        {
+            _confirmCargando = false;
+            StateHasChanged();
+        }
+    }
+}

@@ -1,0 +1,30 @@
+@using System.Globalization
+@using GestionOdontologica.Frontend.Models
+
+<article class="agenda-cal__cita agenda-cita--@Cita.ClaseEstado"
+         style="@Estilo"
+         title="@Cita.NombrePaciente · @Cita.FechaHoraInicio.ToString("HH:mm") – @Cita.FechaHoraFin.ToString("HH:mm") · @Cita.EstadoMostrado">
+    <strong>@Cita.NombrePaciente</strong>
+    <span>@Cita.FechaHoraInicio.ToString("HH:mm")</span>
+</article>
+
+@code {
+    [Parameter, EditorRequired] public CitaDto Cita { get; set; } = default!;
+
+    [Parameter] public int HoraInicio { get; set; } = 7;
+
+    [Parameter] public double PixelesPorHora { get; set; } = 56;
+
+    private string Estilo
+    {
+        get
+        {
+            var minutosDesdeInicio = Cita.FechaHoraInicio.TimeOfDay.TotalMinutes - HoraInicio * 60;
+            var top = Math.Max(0, minutosDesdeInicio / 60 * PixelesPorHora);
+            var alto = Math.Max(24, Cita.DuracionMinutos / 60.0 * PixelesPorHora);
+
+            return $"top: {top.ToString("0.#", CultureInfo.InvariantCulture)}px; " +
+                   $"height: {alto.ToString("0.#", CultureInfo.InvariantCulture)}px;";
+        }
+    }
+}

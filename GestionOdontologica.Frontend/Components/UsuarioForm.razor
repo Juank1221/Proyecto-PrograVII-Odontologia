@@ -1,0 +1,536 @@
+@using GestionOdontologica.Frontend.Models
+@inject UsuariosApiService Api
+@inject RolesApiService RolesApi
+
+<section class="card form-card @(EsModoEdicion ? "form-card--editing" : string.Empty)" aria-labelledby="form-title">
+    <div class="card__header">
+        <div class="icon-tile @(EsModoEdicion ? "icon-tile--accent" : "icon-tile--primary")" aria-hidden="true">
+            <svg class="icon"><use href="@(EsModoEdicion ? "#icon-edit" : "#icon-plus")"></use></svg>
+        </div>
+        <div class="card-header-copy">
+            <div class="card-header-title-row">
+                <h2 id="form-title">@(EsModoEdicion ? "Editar usuario" : "Agregar usuario")</h2>
+                @if (EsModoEdicion && UsuarioAEditar is not null)
+                {
+                    <span class="edit-badge">ID #@UsuarioAEditar.IdUsuario</span>
+                }
+            </div>
+            <p>@(EsModoEdicion ? $"Modificando los accesos de {UsuarioAEditar?.NombreCompleto ?? "usuario"}." : "Registra un nuevo integrante para el equipo.")</p>
+        </div>
+    </div>
+
+    @if (EsModoEdicion)
+    {
+        <div class="editing-banner" role="status">
+            <div class="editing-banner__info">
+                <svg class="icon"><use href="#icon-info"></use></svg>
+                <span>Editando a <strong>@UsuarioAEditar?.NombreUsuario</strong></span>
+            </div>
+            <button type="button" class="btn-link" @onclick="CancelarEdicionAsync">
+                Descartar cambios
+            </button>
+        </div>
+    }
+
+    <EditForm Model="_modelo" OnValidSubmit="GuardarAsync" class="usuario-form" aria-busy="@(_enviando ? "true" : "false")">
+        <DataAnnotationsValidator />
+
+        <div class="@ClaseCampo(nameof(UsuarioFormModel.NombreCompleto))">
+            <label for="nombreCompleto">Nombre completo</label>
+            <InputText id="nombreCompleto"
+                       type="text"
+                       @bind-Value="_modelo.NombreCompleto"
+                       placeholder="Ej. Ana María Pérez"
+                       autocomplete="name"
+                       maxlength="150"
+                       @oninput="LimpiarErroresApi" />
+            <ValidationMessage For="() => _modelo.NombreCompleto" />
+            @if (ErrorApi(nameof(UsuarioFormModel.NombreCompleto)) is { } errorNombre)
+            {
+                <span class="field-error">@errorNombre</span>
+            }
+        </div>
+
+        <div class="form-row">
+            <div class="@ClaseCampo(nameof(UsuarioFormModel.NombreUsuario))">
+                <label for="nombreUsuario">Nombre de usuario</label>
+                <div class="input-with-prefix">
+                    <span class="input-prefix" aria-hidden="true">@@</span>
+                    <InputText id="nombreUsuario"
+                               type="text"
+                               @bind-Value="_modelo.NombreUsuario"
+                               placeholder="aperez"
+                               autocomplete="username"
+                               minlength="3"
+                               maxlength="50"
+                               pattern="[A-Za-z0-9._\-]+"
+                               title="Solo letras, números, puntos, guiones y guiones bajos."
+                               @oninput="LimpiarErroresApi" />
+                </div>
+                <ValidationMessage For="() => _modelo.NombreUsuario" />
+                @if (ErrorApi(nameof(UsuarioFormModel.NombreUsuario)) is { } errorUsuario)
+                {
+                    <span class="field-error">@errorUsuario</span>
+                }
+            </div>
+
+            <div class="field">
+                <label for="rol">Rol</label>
+                <InputSelect id="rol"
+                             @bind-Value="_modelo.Rol"
+                             disabled="@EsAdministradorProtegido">
+                    @foreach (var rol in RolesDisponibles)
+                    {
+                        <option value="@rol">@rol</option>
+                    }
+                </InputSelect>
+                <ValidationMessage For="() => _modelo.Rol" />
+                @if (EsAdministradorProtegido)
+                {
+                    <span class="field-hint">El rol del Administrador está protegido y no puede modificarse.</span>
+                }
+            </div>
+        </div>
+
+        <div class="@ClaseCampo(nameof(UsuarioFormModel.Correo))">
+            <label for="correo">Correo electrónico</label>
+            <InputText id="correo"
+                       type="email"
+                       @bind-Value="_modelo.Correo"
+                       placeholder="ana.perez@odontocare.com"
+                       autocomplete="email"
+                       maxlength="150"
+                       @oninput="LimpiarErroresApi" />
+            <ValidationMessage For="() => _modelo.Correo" />
+            @if (ErrorApi(nameof(UsuarioFormModel.Correo)) is { } errorCorreo)
+            {
+                <span class="field-error">@errorCorreo</span>
+            }
+        </div>
+
+        @if (EsModoEdicion)
+        {
+            <div class="field">
+                <label>Estado del usuario</label>
+                <div class="status-toggle-pill-group" role="radiogroup" aria-label="Estado de cuenta">
+                    <button type="button"
+                            class="status-pill-btn @(_activo ? "is-active" : "")"
+                            @onclick="() => _activo = true">
+                        <span class="status-dot status-dot--active"></span>
+                        <span>Activo (Con acceso)</span>
+                    </button>
+                    <button type="button"
+                            class="status-pill-btn @(!_activo ? "is-inactive" : "")"
+                            disabled="@EsAdministradorProtegido"
+                            title="@(EsAdministradorProtegido ? "El usuario Administrador no puede desactivarse." : null)"
+                            @onclick="() => _activo = false">
+                        <span class="status-dot status-dot--inactive"></span>
+                        <span>Inactivo (Bloqueado)</span>
+                    </button>
+                </div>
+                @if (EsAdministradorProtegido)
+                {
+                    <div class="protected-note" role="note">
+                        <svg class="icon" aria-hidden="true"><use href="#icon-shield-check"></use></svg>
+                        <span>
+                            El usuario Administrador está protegido por una regla de negocio:
+                            no puede desactivarse ni eliminar. Para retirarlo, asigna primero
+                            el rol Administrador a otro usuario.
+                        </span>
+                    </div>
+                }
+            </div>
+        }
+
+        <div class="@ClaseCampo(nameof(UsuarioFormModel.Password))">
+            <label for="password">
+                @(EsModoEdicion ? "Nueva contraseña" : "Contraseña")
+                @if (EsModoEdicion)
+                {
+                    <span class="label-optional">(opcional)</span>
+                }
+            </label>
+            <div class="password-control">
+                <InputText id="password"
+                           type="@(_mostrarPassword ? "text" : "password")"
+                           @bind-Value="_modelo.Password"
+                           placeholder="@(EsModoEdicion ? "Dejar en blanco para conservar actual" : "Mínimo 8 caracteres")"
+                           autocomplete="new-password"
+                           maxlength="72"
+                           @oninput="LimpiarErroresApi" />
+                <button type="button"
+                        class="password-toggle"
+                        aria-label="@(_mostrarPassword ? "Ocultar contraseña" : "Mostrar contraseña")"
+                        @onclick="AlternarPassword">
+                    <svg class="icon"><use href="@(_mostrarPassword ? "#icon-eye-off" : "#icon-eye")"></use></svg>
+                </button>
+            </div>
+            <span class="field-hint">
+                @(EsModoEdicion
+                    ? "Solo ingresa un valor si deseas cambiar la clave. Mínimo 8 caracteres, sin letras ni números iguales consecutivos (aa, 11)."
+                    : "Mínimo 8 caracteres, sin letras ni números iguales consecutivos (aa, 11). Se almacena con BCrypt.")
+            </span>
+            <ValidationMessage For="() => _modelo.Password" />
+            @if (ErrorApi(nameof(UsuarioFormModel.Password)) is { } errorPassword)
+            {
+                <span class="field-error">@errorPassword</span>
+            }
+        </div>
+
+        <p class="form-feedback @ClaseFeedback" role="alert">@_mensajeFeedback</p>
+
+        <div class="form-actions-row">
+            @if (EsModoEdicion)
+            {
+                <button type="button"
+                        class="button button--secondary"
+                        disabled="@_enviando"
+                        @onclick="CancelarEdicionAsync">
+                    Cancelar
+                </button>
+            }
+
+            <button type="submit"
+                    class="button button--primary"
+                    disabled="@_enviando"
+                    aria-busy="@(_enviando ? "true" : "false")">
+                @if (_enviando)
+                {
+                    <span class="button__spinner" aria-hidden="true"></span>
+                }
+                <span class="button__label">
+                    @(EsModoEdicion
+                        ? (_enviando ? "Guardando..." : "Guardar cambios")
+                        : (_enviando ? "Agregando..." : "Agregar usuario"))
+                </span>
+            </button>
+        </div>
+    </EditForm>
+</section>
+
+@code {
+    private List<string> _rolesDisponibles = new()
+    {
+        "Administrador",
+        "Odontólogo",
+        "Recepcionista",
+        "Paciente",
+        "Asistente de Odontología"
+    };
+
+    private IEnumerable<string> RolesDisponibles =>
+        EsModoEdicion && !string.IsNullOrWhiteSpace(_modelo.Rol) && !_rolesDisponibles.Contains(_modelo.Rol, StringComparer.OrdinalIgnoreCase)
+            ? _rolesDisponibles.Append(_modelo.Rol)
+            : _rolesDisponibles;
+
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            var rolesDb = await RolesApi.ListarAsync();
+            if (rolesDb is { Count: > 0 })
+            {
+                var activos = rolesDb
+                    .Where(r => r.Activo)
+                    .Select(r => r.NombreRol.Trim())
+                    .Where(n => !string.IsNullOrEmpty(n))
+                    .Distinct(StringComparer.OrdinalIgnoreCase)
+                    .ToList();
+
+                if (activos.Count > 0)
+                {
+                    _rolesDisponibles = activos;
+                }
+            }
+        }
+        catch
+        {
+            // Conservar roles por defecto si falla la carga o la API está iniciando
+        }
+    }
+
+    private readonly Dictionary<string, string> _erroresApi = new(StringComparer.OrdinalIgnoreCase);
+
+    private UsuarioFormModel _modelo = new();
+    private bool _enviando;
+    private bool _mostrarPassword;
+    private bool _activo = true;
+    private string _mensajeFeedback = string.Empty;
+    private bool _feedbackError;
+    private int _idUsuarioCargado;
+
+    [Parameter]
+    public UsuarioDto? UsuarioAEditar { get; set; }
+
+    [Parameter]
+    public EventCallback<UsuarioDto> OnCreado { get; set; }
+
+    [Parameter]
+    public EventCallback<UsuarioDto> OnActualizado { get; set; }
+
+    [Parameter]
+    public EventCallback OnCancelarEdicion { get; set; }
+
+    private bool EsModoEdicion => UsuarioAEditar is not null;
+
+    private bool EsAdministradorProtegido =>
+        EsModoEdicion && RolesProtegidos.EsAdministrador(UsuarioAEditar?.Rol);
+
+    private string ClaseFeedback => string.IsNullOrEmpty(_mensajeFeedback)
+        ? string.Empty
+        : _feedbackError ? "is-error" : "is-success";
+
+    protected override void OnParametersSet()
+    {
+        if (UsuarioAEditar is not null && UsuarioAEditar.IdUsuario != _idUsuarioCargado)
+        {
+            _idUsuarioCargado = UsuarioAEditar.IdUsuario;
+            _modelo = new UsuarioFormModel
+            {
+                NombreCompleto = UsuarioAEditar.NombreCompleto,
+                NombreUsuario = UsuarioAEditar.NombreUsuario,
+                Correo = UsuarioAEditar.Correo,
+                Rol = string.IsNullOrWhiteSpace(UsuarioAEditar.Rol) ? "Odontólogo" : UsuarioAEditar.Rol,
+                Password = string.Empty, // En edición la contraseña inicia vacía (opcional)
+                EsEdicion = true
+            };
+            _activo = UsuarioAEditar.Activo;
+            _mostrarPassword = false;
+            _erroresApi.Clear();
+            _mensajeFeedback = string.Empty;
+        }
+        else if (UsuarioAEditar is null && _idUsuarioCargado != 0)
+        {
+            _idUsuarioCargado = 0;
+            _modelo = new UsuarioFormModel();
+            _activo = true;
+            _mostrarPassword = false;
+            _erroresApi.Clear();
+            _mensajeFeedback = string.Empty;
+        }
+    }
+
+    private string ClaseCampo(string propiedad)
+    {
+        return _erroresApi.ContainsKey(propiedad) ? "field has-error" : "field";
+    }
+
+    private string? ErrorApi(string propiedad)
+    {
+        return _erroresApi.TryGetValue(propiedad, out var mensaje) ? mensaje : null;
+    }
+
+    private void LimpiarErroresApi()
+    {
+        if (_erroresApi.Count == 0 && string.IsNullOrEmpty(_mensajeFeedback))
+        {
+            return;
+        }
+
+        _erroresApi.Clear();
+
+        if (_feedbackError)
+        {
+            _mensajeFeedback = string.Empty;
+            _feedbackError = false;
+        }
+    }
+
+    private void AlternarPassword()
+    {
+        _mostrarPassword = !_mostrarPassword;
+    }
+
+    private async Task GuardarAsync()
+    {
+        _erroresApi.Clear();
+        _mensajeFeedback = string.Empty;
+        _feedbackError = false;
+
+        if (EsModoEdicion)
+        {
+            await EjecutarActualizacionAsync();
+        }
+        else
+        {
+            await EjecutarCreacionAsync();
+        }
+    }
+
+    private async Task EjecutarCreacionAsync()
+    {
+        if (string.IsNullOrWhiteSpace(_modelo.Password))
+        {
+            _erroresApi[nameof(UsuarioFormModel.Password)] = "La contraseña es obligatoria para nuevos usuarios.";
+            _mensajeFeedback = "Revisa los campos marcados.";
+            _feedbackError = true;
+            return;
+        }
+
+        var erroresPassword = PasswordPolicy.ObtenerErrores(_modelo.Password);
+        if (erroresPassword.Count > 0)
+        {
+            _erroresApi[nameof(UsuarioFormModel.Password)] = string.Join(" ", erroresPassword);
+            _mensajeFeedback = "Revisa los campos marcados.";
+            _feedbackError = true;
+            return;
+        }
+
+        _enviando = true;
+
+        try
+        {
+            var dto = new CreacionUsuarioDto
+            {
+                NombreCompleto = _modelo.NombreCompleto.Trim(),
+                NombreUsuario = _modelo.NombreUsuario.Trim(),
+                Correo = _modelo.Correo.Trim(),
+                Password = _modelo.Password,
+                Rol = _modelo.Rol
+            };
+
+            var creado = await Api.CrearAsync(dto);
+
+            _modelo = new UsuarioFormModel();
+            _mostrarPassword = false;
+            _mensajeFeedback = "Usuario agregado correctamente.";
+            _feedbackError = false;
+
+            await OnCreado.InvokeAsync(creado);
+        }
+        catch (ApiException ex)
+        {
+            MostrarErrorApi(ex);
+        }
+        finally
+        {
+            _enviando = false;
+        }
+    }
+
+    private async Task EjecutarActualizacionAsync()
+    {
+        if (UsuarioAEditar is null) return;
+
+        // Si se ingresó contraseña, debe cumplir la misma política del backend.
+        if (!string.IsNullOrWhiteSpace(_modelo.Password))
+        {
+            var erroresPassword = PasswordPolicy.ObtenerErrores(_modelo.Password);
+            if (erroresPassword.Count > 0)
+            {
+                _erroresApi[nameof(UsuarioFormModel.Password)] = string.Join(" ", erroresPassword);
+                _mensajeFeedback = "Revisa los campos marcados.";
+                _feedbackError = true;
+                return;
+            }
+        }
+
+        _enviando = true;
+
+        try
+        {
+            var dto = new ActualizacionUsuarioDto
+            {
+                NombreCompleto = _modelo.NombreCompleto.Trim(),
+                NombreUsuario = _modelo.NombreUsuario.Trim(),
+                Correo = _modelo.Correo.Trim(),
+                Rol = _modelo.Rol,
+                Activo = _activo,
+                Password = string.IsNullOrWhiteSpace(_modelo.Password) ? null : _modelo.Password.Trim()
+            };
+
+            var actualizado = await Api.ActualizarAsync(UsuarioAEditar.IdUsuario, dto);
+
+            _mensajeFeedback = "Cambios guardados con éxito.";
+            _feedbackError = false;
+
+            await OnActualizado.InvokeAsync(actualizado);
+        }
+        catch (ApiException ex)
+        {
+            MostrarErrorApi(ex);
+        }
+        finally
+        {
+            _enviando = false;
+        }
+    }
+
+    private Task CancelarEdicionAsync()
+    {
+        _idUsuarioCargado = 0;
+        _modelo = new UsuarioFormModel();
+        _activo = true;
+        _erroresApi.Clear();
+        _mensajeFeedback = string.Empty;
+        return OnCancelarEdicion.InvokeAsync();
+    }
+
+    private void MostrarErrorApi(ApiException ex)
+    {
+        _erroresApi.Clear();
+        _mensajeFeedback = ex.Message;
+        _feedbackError = true;
+
+        if (ex.Problem?.Errors is { Count: > 0 } errores)
+        {
+            var mapeados = 0;
+
+            foreach (var (campo, mensajes) in errores)
+            {
+                var propiedad = NormalizarCampo(campo);
+
+                if (propiedad is null)
+                {
+                    continue;
+                }
+
+                var mensaje = mensajes?.FirstOrDefault(m => !string.IsNullOrWhiteSpace(m))
+                    ?? "Valor inválido.";
+
+                _erroresApi[propiedad] = mensaje;
+                mapeados++;
+            }
+
+            if (mapeados > 0)
+            {
+                _mensajeFeedback = "Revisa los campos marcados.";
+                return;
+            }
+        }
+
+        if (ex.Status == 409)
+        {
+            const string mensaje = "Ese nombre de usuario o correo ya está registrado.";
+            _erroresApi[nameof(UsuarioFormModel.NombreUsuario)] = mensaje;
+            _erroresApi[nameof(UsuarioFormModel.Correo)] = mensaje;
+            _mensajeFeedback = "Revisa los campos marcados.";
+        }
+    }
+
+    private static string? NormalizarCampo(string? campo)
+    {
+        if (string.IsNullOrWhiteSpace(campo))
+        {
+            return null;
+        }
+
+        var nombre = campo.Trim();
+        var punto = nombre.LastIndexOf('.');
+
+        if (punto >= 0 && punto < nombre.Length - 1)
+        {
+            nombre = nombre[(punto + 1)..];
+        }
+
+        return nombre.ToLowerInvariant() switch
+        {
+            "nombrecompleto" => nameof(UsuarioFormModel.NombreCompleto),
+            "nombreusuario" => nameof(UsuarioFormModel.NombreUsuario),
+            "correo" => nameof(UsuarioFormModel.Correo),
+            "password" => nameof(UsuarioFormModel.Password),
+            "rol" => nameof(UsuarioFormModel.Rol),
+            _ => null
+        };
+    }
+}

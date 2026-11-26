@@ -1,0 +1,1375 @@
+@page "/odontologos"
+@attribute [Microsoft.AspNetCore.Authorization.Authorize]
+@using System.ComponentModel.DataAnnotations
+@using GestionOdontologica.Frontend.Models
+@using GestionOdontologica.Frontend.Services
+@inject OdontologosApiService OdontologosApi
+@inject TratamientosApiService TratamientosApi
+@inject UsuariosApiService UsuariosApi
+@inject ToastService ToastService
+
+<PageTitle>Odontólogos</PageTitle>
+
+<div class="usuarios-page">
+    <header class="usuarios-page__header">
+        <div>
+            <h1>Odontólogos</h1>
+            <p>Mantenimiento de odontólogos, configuración de horarios y asociación de tratamientos.</p>
+        </div>
+    </header>
+
+    <div class="usuarios-layout">
+        <section class="usuarios-card usuarios-card--form">
+            <header class="usuarios-card__header">
+                <div>
+                    <h2>@(Editando ? "Editar odontólogo" : "Nuevo odontólogo")</h2>
+                    <p>@(Editando ? "Actualiza los datos del perfil clínico del odontólogo." : "Vincula el perfil clínico con una cuenta de usuario de forma atómica.")</p>
+                </div>
+            </header>
+            @if (!Editando)
+            {
+                <div class="form-section">
+                    <div class="form-section__header">
+                        <h3>Vinculación con cuenta de usuario</h3>
+                        <p>Selecciona un usuario sin odontólogo o crea uno nuevo</p>
+                    </div>
+                    <div class="form-grid">
+                        <div class="form-field form-field--span-2">
+                            <label>Tipo de vinculación</label>
+                            <InputSelect class="form-control" @bind-Value="TipoVinculacion" @bind-Value:after="OnTipoVinculacionChanged">
+                                <option value="VINCULAR">Vincular a usuario con rol Odontólogo</option>
+                                <option value="CREAR_USUARIO">Crear nuevo usuario y odontólogo</option>
+                            </InputSelect>
+                        </div>
+                    </div>
+
+                    @if (TipoVinculacion == "VINCULAR")
+                    {
+                        <div class="form-grid">
+                            <div class="form-field form-field--span-2">
+                                <label>Usuario disponible *</label>
+                                <InputSelect class="form-control" @bind-Value="UsuarioSeleccionadoId" @bind-Value:after="OnUsuarioSeleccionadoChanged">
+                                    <option value="0">Seleccione un usuario...</option>
+                                    @foreach (var u in UsuariosSinOdontologo)
+                                    {
+                                        <option value="@u.IdUsuario">@u.NombreCompleto (@u.NombreUsuario) - @u.Correo</option>
+                                    }
+                                </InputSelect>
+                                <small class="usuarios-table__meta">Al seleccionar el usuario se autocompletarán Nombres, Apellidos y Correo clínico en "Datos del odontólogo".</small>
+                            </div>
+                        </div>
+                    }
+                    else
+                    {
+                        <div class="form-grid">
+                            <div class="form-field form-field--span-2">
+                                <label>Nombre completo del usuario *</label>
+                                <InputText class="form-control" @bind-Value="UsuarioFormulario.NombreCompleto" />
+                            </div>
+                            <div class="form-field">
+                                <label>Nombre de usuario *</label>
+                                <InputText class="form-control" @bind-Value="UsuarioFormulario.NombreUsuario" />
+                            </div>
+                            <div class="form-field">
+                                <label>Correo del usuario *</label>
+                                <InputText class="form-control" @bind-Value="UsuarioFormulario.CorreoUsuario" />
+                            </div>
+                            <div class="form-field">
+                                <label>Contraseña *</label>
+                                <InputText type="password" class="form-control" @bind-Value="UsuarioFormulario.Password" />
+                                <small class="field-hint">Mínimo 8 caracteres, sin letras ni números iguales consecutivos (aa, 11).</small>
+                            </div>
+                            <div class="form-field">
+                                <label>Rol</label>
+                                <InputSelect class="form-control" @bind-Value="UsuarioFormulario.Rol" disabled>
+                                    <option value="Odontólogo">Odontólogo</option>
+                                </InputSelect>
+                            </div>
+                        </div>
+                    }
+                </div>
+            }
+
+            <EditForm Model="Formulario" OnValidSubmit="GuardarAsync">
+                <DataAnnotationsValidator />
+                <div class="form-section">
+                    <div class="form-section__header">
+                        <h3>Datos del odontólogo</h3>
+                        <p>Información profesional y de contacto</p>
+                    </div>
+                    <div class="form-grid">
+                        <div class="form-field form-field--span-2">
+                            <label>Nombres *</label>
+                            <InputText class="form-control" @bind-Value="Formulario.Nombres" />
+                            <ValidationMessage For="@(() => Formulario.Nombres)" />
+                        </div>
+                        <div class="form-field form-field--span-2">
+                            <label>Apellidos *</label>
+                            <InputText class="form-control" @bind-Value="Formulario.Apellidos" />
+                            <ValidationMessage For="@(() => Formulario.Apellidos)" />
+                        </div>
+                        <div class="form-field">
+                            <label>Número de colegiado *</label>
+                            <InputText class="form-control" @bind-Value="Formulario.NumeroColegiado" />
+                            <ValidationMessage For="@(() => Formulario.NumeroColegiado)" />
+                        </div>
+                        <div class="form-field">
+                            <label>Especialidad</label>
+                            <InputSelect class="form-control" @bind-Value="Formulario.Especialidad">
+                                <option value="">Seleccione una especialidad...</option>
+                                @foreach (var especialidad in Especialidades)
+                                {
+                                    <option value="@especialidad">@especialidad</option>
+                                }
+                                @if (!string.IsNullOrWhiteSpace(Formulario.Especialidad) && !Especialidades.Contains(Formulario.Especialidad))
+                                {
+                                    <option value="@Formulario.Especialidad">@Formulario.Especialidad</option>
+                                }
+                            </InputSelect>
+                        </div>
+                        <div class="form-field">
+                            <label>Teléfono</label>
+                            <InputText class="form-control" @bind-Value="Formulario.Telefono" />
+                        </div>
+                        <div class="form-field">
+                            <label>Correo clínico</label>
+                            <InputText class="form-control" @bind-Value="Formulario.Correo" />
+                            <ValidationMessage For="@(() => Formulario.Correo)" />
+                        </div>
+                        @if (Editando)
+                        {
+                            <div class="form-field">
+                                <label>ID Usuario (opcional)</label>
+                                <InputNumber class="form-control" @bind-Value="Formulario.IdUsuario" />
+                            </div>
+                        }
+                    </div>
+                </div>
+                <div class="form-actions">
+                    <button class="btn btn--primary" type="submit" disabled="@Guardando">@((Guardando) ? "Guardando..." : (Editando ? "Guardar cambios" : "Registrar odontólogo vinculado"))</button>
+                    <button class="btn btn--ghost" type="button" @onclick="CancelarEdicion" disabled="@Guardando">Cancelar</button>
+                </div>
+            </EditForm>
+        </section>
+
+        <section class="usuarios-card usuarios-card--list">
+            <header class="usuarios-card__header">
+                <div>
+                    <h2>Listado de odontólogos</h2>
+                    <p>@ListaOdontologos.Count odontólogo(s) registrados</p>
+                </div>
+                <div class="usuarios-card__header-actions">
+                    <input class="form-control usuarios-search" placeholder="Buscar por nombre, apellido, colegiado o correo..." @bind="Filtro" @bind:event="oninput" />
+                </div>
+            </header>
+
+            @if (Cargando)
+            {
+                <p>Cargando odontólogos...</p>
+            }
+            else if (!OdontologosFiltrados.Any())
+            {
+                <p>No hay odontólogos para mostrar.</p>
+            }
+            else
+            {
+                <div class="table-wrapper">
+                    <table class="usuarios-table">
+                        <thead>
+                            <tr>
+                                <th>Odontólogo</th>
+                                <th>Colegiado</th>
+                                <th>Especialidad</th>
+                                <th>Contacto</th>
+                                <th>Usuario vinculado</th>
+                                <th>Estado</th>
+                                <th class="usuarios-table__actions">Acciones</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @foreach (var odontologo in OdontologosPagina)
+                            {
+                                <tr>
+                                    <td>
+                                        <div class="usuarios-table__name">@odontologo.Nombres @odontologo.Apellidos</div>
+                                    </td>
+                                    <td>@odontologo.NumeroColegiado</td>
+                                    <td>@(odontologo.Especialidad ?? "-")</td>
+                                    <td>
+                                        <div>@(odontologo.Telefono ?? "-")</div>
+                                        <div class="usuarios-table__meta">@(odontologo.Correo ?? "-")</div>
+                                    </td>
+                                    <td>
+                                        @if (odontologo.IdUsuario.HasValue)
+                                        {
+                                            <span class="badge badge--info">ID @odontologo.IdUsuario.Value</span>
+                                        }
+                                        else
+                                        {
+                                            <span class="usuarios-table__meta">Sin vincular</span>
+                                        }
+                                    </td>
+                                    <td><span class="badge @(odontologo.Activo ? "badge--success" : "badge--danger")">@(odontologo.Activo ? "Activo" : "Inactivo")</span></td>
+                                    <td class="usuarios-table__actions">
+                                        <button class="btn btn--ghost btn--sm" @onclick="() => Editar(odontologo)">Editar</button>
+                                        <button class="btn btn--ghost btn--sm" @onclick="() => AbrirHorarios(odontologo)">Horarios</button>
+                                        <button class="btn btn--ghost btn--sm" @onclick="() => AbrirTratamientos(odontologo)">Tratamientos</button>
+                                        @if (odontologo.Activo)
+                                        {
+                                            <button class="btn btn--ghost btn--sm" @onclick="() => SolicitarCambioEstado(odontologo, false)">Desactivar</button>
+                                        }
+                                        else
+                                        {
+                                            <button class="btn btn--ghost btn--sm" @onclick="() => SolicitarCambioEstado(odontologo, true)">Activar</button>
+                                        }
+                                    </td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+
+                <DataPagination TotalRegistros="TotalFiltrados"
+                                PaginaActual="_paginacion.PaginaEfectiva(TotalFiltrados)"
+                                TamanoPagina="_paginacion.Tamano"
+                                Singular="odontólogo"
+                                Plural="odontólogos"
+                                OnPaginaCambiada="IrAPagina"
+                                OnTamanoCambiado="CambiarTamanoPagina" />
+            }
+        </section>
+    </div>
+</div>
+
+@if (MostrarHorarios && OdontologoSeleccionado != null)
+{
+    <div class="modal-backdrop">
+        <div class="modal-dialog modal-dialog--wide">
+            <header class="modal-header">
+                <div class="modal-header__title">
+                    <h2>Agenda semanal</h2>
+                    <p>@OdontologoSeleccionado.Nombres @OdontologoSeleccionado.Apellidos</p>
+                </div>
+                <button class="modal-close" @onclick="CerrarHorarios">×</button>
+            </header>
+            <div class="modal-body modal-body--wide">
+                @if (!string.IsNullOrWhiteSpace(ErrorHorarios))
+                {
+                    <div class="agenda-alert" role="alert">
+                        <svg class="icon" aria-hidden="true"><use href="#icon-alert"></use></svg>
+                        <div>
+                            <strong>Conflicto de horario</strong>
+                            <span>@ErrorHorarios</span>
+                        </div>
+                    </div>
+                }
+
+                <div class="agenda-toolbar">
+                    <div class="agenda-stats">
+                        <div class="agenda-stat">
+                            <span>Días habilitados</span>
+                            <strong>@HorariosConfiguracion.Count(h => h.Activo)<small>/ 7</small></strong>
+                        </div>
+                        <div class="agenda-stat">
+                            <span>Horas semanales</span>
+                            <strong>@HorasSemanales.ToString("0.#")<small>h</small></strong>
+                        </div>
+                        <div class="agenda-stat">
+                            <span>Jornada base</span>
+                            <strong>08:00<small>a</small>17:00</strong>
+                        </div>
+                    </div>
+                    <div class="agenda-actions">
+                        <button type="button" class="btn btn--ghost btn--sm" @onclick="AplicarJornadaEstandar">Aplicar 08:00 - 17:00</button>
+                        <button type="button" class="btn btn--ghost btn--sm" @onclick="MarcarLaborables">Lunes a viernes</button>
+                        <button type="button" class="btn btn--ghost btn--sm" @onclick="LimpiarHorarios">Limpiar</button>
+                    </div>
+                </div>
+
+                <div class="agenda-calendar-wrap">
+                    <div class="agenda-calendar">
+                        <div class="agenda-calendar__axis">
+                            <div class="agenda-calendar__spacer"></div>
+                            <div class="agenda-calendar__track agenda-calendar__track--axis">
+                                @foreach (var hora in HorasEjeCalendario)
+                                {
+                                    <span style="top:@PorcentajeHora(hora).ToString("0.##", System.Globalization.CultureInfo.InvariantCulture)%">@hora</span>
+                                }
+                            </div>
+                        </div>
+                        @for (int i = 1; i <= 7; i++)
+                        {
+                            var diaCal = i;
+                            var itemCal = HorariosConfiguracion.FirstOrDefault(h => h.DiaSemana == diaCal);
+                            if (itemCal is null) { continue; }
+
+                            <div class="agenda-calendar__day @(itemCal.Activo ? "is-active" : "")">
+                                <div class="agenda-calendar__day-head">
+                                    <strong>@NombreDiaCorto(diaCal)</strong>
+                                    <span>@(itemCal.Activo ? $"{itemCal.HoraInicio} - {itemCal.HoraFin}" : "Libre")</span>
+                                </div>
+                                <div class="agenda-calendar__track">
+                                    @if (itemCal.Activo)
+                                    {
+                                        <div class="agenda-calendar__block @(HorarioInvalido(itemCal) || HorarioTraslapado(itemCal) ? "is-invalid" : "")" style="@EstiloBloqueCalendario(itemCal)">
+                                            <span>@itemCal.HoraInicio</span>
+                                            <em>@DuracionBloque(itemCal)</em>
+                                            <span>@itemCal.HoraFin</span>
+                                        </div>
+                                    }
+                                </div>
+                            </div>
+                        }
+                    </div>
+                </div>
+
+                <div class="agenda-editors">
+                    @for (int i = 1; i <= 7; i++)
+                    {
+                        var dia = i;
+                        var item = HorariosConfiguracion.FirstOrDefault(h => h.DiaSemana == dia);
+                        if (item is null) { continue; }
+
+                        <article class="agenda-editor @(item.Activo ? "is-active" : "") @(HorarioInvalido(item) || HorarioTraslapado(item) ? "is-invalid" : "")">
+                            <header class="agenda-editor__head">
+                                <div class="agenda-editor__day">
+                                    <span class="agenda-editor__indicator"></span>
+                                    <div>
+                                        <strong>@NombreDia(dia)</strong>
+                                        <small>@(item.Activo ? $"Jornada de {DuracionBloque(item)}" : "Sin atención")</small>
+                                    </div>
+                                </div>
+                                <label class="switch" title="Habilitar día">
+                                    <input type="checkbox" @bind="item.Activo" />
+                                    <span class="switch__slider"></span>
+                                </label>
+                            </header>
+                            <div class="agenda-editor__times">
+                                <label>
+                                    <span>Inicio</span>
+                                    <select class="form-control" @bind="item.HoraInicio" disabled="@(!item.Activo)">
+                                        @foreach (var hora in HorasDisponibles)
+                                        {
+                                            <option value="@hora">@hora</option>
+                                        }
+                                    </select>
+                                </label>
+                                <span class="agenda-editor__arrow">→</span>
+                                <label>
+                                    <span>Fin</span>
+                                    <select class="form-control" @bind="item.HoraFin" disabled="@(!item.Activo)">
+                                        @foreach (var hora in HorasDisponibles)
+                                        {
+                                            <option value="@hora">@hora</option>
+                                        }
+                                    </select>
+                                </label>
+                            </div>
+                            @if (item.Activo && HorarioInvalido(item))
+                            {
+                                <p class="agenda-editor__error">La hora de fin debe ser posterior al inicio.</p>
+                            }
+                            else if (item.Activo && HorarioTraslapado(item))
+                            {
+                                <p class="agenda-editor__error">Este turno se traslapa con otro horario del mismo día.</p>
+                            }
+                        </article>
+                    }
+                </div>
+            </div>
+            <footer class="modal-footer">
+                <button class="btn btn--ghost" @onclick="CerrarHorarios">Cancelar</button>
+                <button class="btn btn--primary" @onclick="GuardarHorariosAsync" disabled="@GuardandoHorarios">@((GuardandoHorarios) ? "Guardando..." : "Guardar horarios")</button>
+            </footer>
+        </div>
+    </div>
+}
+
+@if (MostrarTratamientos && OdontologoSeleccionado != null)
+{
+    <div class="modal-backdrop">
+        <div class="modal-dialog modal-dialog--wide">
+            <header class="modal-header">
+                <div class="modal-header__title">
+                    <h2>Tratamientos</h2>
+                    <p>@OdontologoSeleccionado.Nombres @OdontologoSeleccionado.Apellidos</p>
+                </div>
+                <button class="modal-close" @onclick="CerrarTratamientos">×</button>
+            </header>
+            <div class="modal-body modal-body--wide">
+                <div class="treatment-stats">
+                    <div class="treatment-stat">
+                        <span>Tratamientos asociados</span>
+                        <strong>@TratamientosActivos.Count</strong>
+                    </div>
+                    <div class="treatment-stat">
+                        <span>Catálogo disponible</span>
+                        <strong>@CatalogoTratamientos.Count</strong>
+                    </div>
+                    <div class="treatment-stat treatment-stat--money">
+                        <span>Valor asociado</span>
+                        <strong>@FormatearMoneda(TotalAsociado)</strong>
+                    </div>
+                </div>
+
+                <section class="treatment-assign">
+                    <div class="treatment-assign__header">
+                        <div>
+                            <h3>Asociar tratamiento</h3>
+                            <p>Busca por código o nombre y selecciona el tratamiento del catálogo.</p>
+                        </div>
+                    </div>
+
+                    <div class="combo">
+                        <div class="combo__control @(MostrarOpcionesTratamiento ? "is-open" : "")">
+                            <svg class="combo__icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                                <circle cx="11" cy="11" r="7"></circle>
+                                <line x1="20" y1="20" x2="16.65" y2="16.65"></line>
+                            </svg>
+                            <input class="form-control combo__input"
+                                   placeholder="Buscar tratamiento por nombre o código..."
+                                   @bind="BusquedaTratamiento"
+                                   @bind:event="oninput"
+                                   @bind:after="OnBusquedaTratamientoChanged"
+                                   @onfocus="AbrirOpcionesTratamiento" />
+                        </div>
+
+                        @if (MostrarOpcionesTratamiento)
+                        {
+                            <div class="combo__menu">
+                                @if (!TratamientosDisponiblesFiltrados.Any())
+                                {
+                                    <div class="combo__empty">No hay tratamientos activos que coincidan con la búsqueda.</div>
+                                }
+                                else
+                                {
+                                    @foreach (var t in TratamientosDisponiblesFiltrados)
+                                    {
+                                        <button type="button" class="combo__option" @onclick="() => SeleccionarTratamiento(t)">
+                                            <span class="combo__code">@t.CodigoTratamiento</span>
+                                            <span class="combo__name">@t.Nombre</span>
+                                            <span class="combo__price">@FormatearMoneda(t.Precio)</span>
+                                        </button>
+                                    }
+                                }
+                            </div>
+                        }
+
+                        @if (TratamientoSeleccionado is not null)
+                        {
+                            <div class="combo__selection">
+                                <span class="combo__code">@TratamientoSeleccionado.CodigoTratamiento</span>
+                                <div class="combo__selection-info">
+                                    <strong>@TratamientoSeleccionado.Nombre</strong>
+                                    <span>@FormatearMoneda(TratamientoSeleccionado.Precio)</span>
+                                </div>
+                                <button type="button" class="combo__clear" @onclick="LimpiarSeleccionTratamiento" title="Quitar selección">×</button>
+                            </div>
+                        }
+                    </div>
+
+                    <div class="treatment-assign__footer">
+                        <span class="treatment-assign__hint">
+                            @(TratamientoSeleccionado is null
+                                ? "Selecciona un tratamiento activo del catálogo para vincularlo."
+                                : "Tratamiento seleccionado listo para asociar.")
+                        </span>
+                        <button type="button" class="btn btn--primary" @onclick="AsociarTratamientoAsync" disabled="@(GuardandoTratamientos || TratamientoAAsociarId == 0)">
+                            @(GuardandoTratamientos ? "Asociando..." : "Asociar tratamiento")
+                        </button>
+                    </div>
+                </section>
+
+                <section class="treatment-list">
+                    <div class="treatment-list__header">
+                        <h3>Tratamientos vinculados</h3>
+                        <span class="treatment-list__count">@TratamientosActivos.Count</span>
+                    </div>
+
+                    @if (!TratamientosActivos.Any())
+                    {
+                        <div class="empty-state empty-state--compact">
+                            <strong>Sin tratamientos asociados</strong>
+                            <span>Usa el buscador de arriba para vincular el primero.</span>
+                        </div>
+                    }
+                    else
+                    {
+                        @foreach (var t in TratamientosActivos)
+                        {
+                            <article class="treatment-item">
+                                <span class="treatment-item__code">@t.CodigoTratamiento</span>
+                                <div class="treatment-item__info">
+                                    <strong>@t.Nombre</strong>
+                                    <span>@(string.IsNullOrWhiteSpace(t.Descripcion) ? "Sin descripción" : t.Descripcion)</span>
+                                </div>
+                                <span class="treatment-item__price">@FormatearMoneda(t.Precio)</span>
+                                <span class="badge badge--success">Asociado</span>
+                                <button type="button" class="btn btn--ghost btn--sm" @onclick="() => DesasociarTratamientoAsync(t.IdTratamiento)">Desasociar</button>
+                            </article>
+                        }
+                    }
+                </section>
+            </div>
+            <footer class="modal-footer">
+                <button class="btn btn--ghost" @onclick="CerrarTratamientos">Cerrar</button>
+            </footer>
+        </div>
+    </div>
+}
+
+<ConfirmModal Visible="MostrarConfirmacionEstado"
+              Titulo="@TituloConfirmacionEstado"
+              Mensaje="@MensajeConfirmacionEstado"
+              Detalle="@DetalleConfirmacionEstado"
+              BotonConfirmar="@(EstadoPendienteActivo ? "Activar odontólogo" : "Desactivar odontólogo")"
+              EsPeligro="@(!EstadoPendienteActivo)"
+              Icono="@(EstadoPendienteActivo ? "#icon-user-check" : "#icon-alert")"
+              Cargando="ConfirmandoEstado"
+              OnConfirmar="ConfirmarCambioEstadoAsync"
+              OnCancelar="CerrarConfirmacionEstado" />
+
+@code {
+    private List<OdontologoDto> ListaOdontologos = new();
+    private bool Cargando = true;
+    private bool Guardando = false;
+    private bool Editando = false;
+    private int? IdOdontologoEditando;
+
+    private OdontologoForm Formulario = new();
+    private readonly Paginacion _paginacion = new();
+    private string _filtro = string.Empty;
+
+    private string Filtro
+    {
+        get => _filtro;
+        set
+        {
+            _filtro = value;
+            _paginacion.Reiniciar();
+        }
+    }
+
+    private static readonly string[] Especialidades =
+    {
+        "Odontología General",
+        "Ortodoncia",
+        "Endodoncia",
+        "Periodoncia",
+        "Prostodoncia",
+        "Implantología",
+        "Odontopediatría",
+        "Cirugía Oral y Maxilofacial",
+        "Patología Oral",
+        "Radiología Oral y Maxilofacial",
+        "Estética Dental",
+        "Rehabilitación Oral"
+    };
+
+    private string TipoVinculacion = "VINCULAR";
+    private int UsuarioSeleccionadoId = 0;
+    private List<UsuarioSinOdontologoDto> UsuariosSinOdontologo = new();
+    private UsuarioVinculadoForm UsuarioFormulario = new();
+
+    private bool MostrarHorarios = false;
+    private OdontologoDto? OdontologoSeleccionado;
+    private List<HorarioItemDto> HorariosConfiguracion = new();
+    private bool GuardandoHorarios = false;
+    private string? ErrorHorarios;
+
+    private bool MostrarTratamientos = false;
+    private List<TratamientoDto> CatalogoTratamientos = new();
+    private List<TratamientoDto> TratamientosAsociados = new();
+    private int TratamientoAAsociarId = 0;
+    private bool GuardandoTratamientos = false;
+    private string BusquedaTratamiento = string.Empty;
+    private bool MostrarOpcionesTratamiento = false;
+    private TratamientoDto? TratamientoSeleccionado;
+
+    private bool MostrarConfirmacionEstado;
+    private OdontologoDto? OdontologoEstadoPendiente;
+    private bool EstadoPendienteActivo;
+    private bool ConfirmandoEstado;
+
+    private static readonly IReadOnlyList<string> HorasDisponibles = CrearHorasDisponibles();
+    private static readonly string[] HorasEjeCalendario = { "06:00", "08:00", "10:00", "12:00", "14:00", "16:00", "18:00", "20:00" };
+    private const int MinutoInicioCalendario = 6 * 60;
+    private const int MinutoFinCalendario = 21 * 60;
+
+    private IEnumerable<OdontologoDto> OdontologosFiltrados => string.IsNullOrWhiteSpace(Filtro)
+        ? ListaOdontologos
+        : ListaOdontologos.Where(o => ($"{o.Nombres} {o.Apellidos} {o.NumeroColegiado} {o.Correo} {o.Especialidad}").Contains(Filtro, StringComparison.OrdinalIgnoreCase));
+
+    private List<OdontologoDto> OdontologosPagina => _paginacion.Aplicar(OdontologosFiltrados).ToList();
+
+    private int TotalFiltrados => OdontologosFiltrados.Count();
+
+    private void IrAPagina(int pagina) => _paginacion.IrA(pagina, TotalFiltrados);
+
+    private void CambiarTamanoPagina(int tamano) => _paginacion.CambiarTamano(tamano);
+
+    private List<TratamientoDto> TratamientosActivos =>
+        TratamientosAsociados.Where(t => t.AsociadoActivo == true).ToList();
+
+    private decimal TotalAsociado => TratamientosActivos.Sum(t => t.Precio);
+
+    private string TituloConfirmacionEstado => EstadoPendienteActivo
+        ? "¿Activar odontólogo?"
+        : "¿Desactivar odontólogo?";
+
+    private string MensajeConfirmacionEstado => OdontologoEstadoPendiente is null
+        ? string.Empty
+        : $"¿Desea {(EstadoPendienteActivo ? "activar" : "desactivar")} a {OdontologoEstadoPendiente.Nombres} {OdontologoEstadoPendiente.Apellidos}?";
+
+    private string DetalleConfirmacionEstado => EstadoPendienteActivo
+        ? "El odontólogo volverá a estar disponible para la agenda y la asignación de citas."
+        : "El odontólogo dejará de estar disponible para nuevas citas. El registro se conserva y podrá reactivarse después.";
+
+    private double HorasSemanales => HorariosConfiguracion
+        .Where(h => h.Activo && !HorarioInvalido(h))
+        .Sum(DuracionHoras);
+
+    private IEnumerable<TratamientoDto> TratamientosDisponiblesFiltrados
+    {
+        get
+        {
+            var asociados = TratamientosAsociados
+                .Where(t => t.AsociadoActivo == true)
+                .Select(t => t.IdTratamiento)
+                .ToHashSet();
+
+            var texto = BusquedaTratamiento.Trim();
+
+            return CatalogoTratamientos
+                .Where(t => t.Activo)
+                .Where(t => !asociados.Contains(t.IdTratamiento))
+                .Where(t => texto.Length == 0
+                    || $"{t.CodigoTratamiento} {t.Nombre}".Contains(texto, StringComparison.OrdinalIgnoreCase))
+                .OrderBy(t => t.Nombre);
+        }
+    }
+
+    protected override async Task OnInitializedAsync()
+    {
+        await CargarAsync();
+        await CargarCatalogoTratamientosAsync();
+        await CargarUsuariosSinOdontologoAsync();
+    }
+
+    private async Task CargarAsync()
+    {
+        try
+        {
+            Cargando = true;
+            ListaOdontologos = (await OdontologosApi.ObtenerTodosAsync()).ToList();
+        }
+        catch (Exception ex)
+        {
+            ToastService.Mostrar("Error", $"Error al cargar odontólogos: {ex.Message}", ToastTipo.Error);
+        }
+        finally
+        {
+            Cargando = false;
+        }
+    }
+
+    private async Task CargarCatalogoTratamientosAsync()
+    {
+        try
+        {
+            var tratamientos = await TratamientosApi.ObtenerTodosAsync();
+
+            CatalogoTratamientos = tratamientos
+                .Where(t => t.Activo)
+                .ToList();
+
+            if (TratamientoSeleccionado is not null &&
+                !CatalogoTratamientos.Any(t => t.IdTratamiento == TratamientoSeleccionado.IdTratamiento))
+            {
+                TratamientoSeleccionado = null;
+                TratamientoAAsociarId = 0;
+            }
+        }
+        catch (Exception ex)
+        {
+            ToastService.Mostrar("Error", $"Error al cargar tratamientos: {ex.Message}", ToastTipo.Error);
+        }
+    }
+
+    private async Task CargarUsuariosSinOdontologoAsync()
+    {
+        try
+        {
+            UsuariosSinOdontologo = (await UsuariosApi.ObtenerSinOdontologoAsync()).ToList();
+        }
+        catch (Exception ex)
+        {
+            ToastService.Mostrar("Error", $"Error al cargar usuarios disponibles: {ex.Message}", ToastTipo.Error);
+        }
+    }
+
+    private void OnUsuarioSeleccionadoChanged()
+    {
+        if (TipoVinculacion != "VINCULAR" || UsuarioSeleccionadoId == 0)
+        {
+            return;
+        }
+
+        var usuario = UsuariosSinOdontologo.FirstOrDefault(u => u.IdUsuario == UsuarioSeleccionadoId);
+        if (usuario == null)
+        {
+            return;
+        }
+
+        var nombreCompleto = (usuario.NombreCompleto ?? string.Empty).Trim();
+        if (!string.IsNullOrWhiteSpace(nombreCompleto))
+        {
+            var partes = nombreCompleto.Split(new[] { ' ', '\t' }, StringSplitOptions.RemoveEmptyEntries);
+            if (partes.Length == 1)
+            {
+                Formulario.Nombres = partes[0];
+                Formulario.Apellidos = string.Empty;
+            }
+            else if (partes.Length >= 2)
+            {
+                Formulario.Apellidos = partes[partes.Length - 1];
+                Formulario.Nombres = string.Join(" ", partes.Take(partes.Length - 1));
+            }
+        }
+
+        if (!string.IsNullOrWhiteSpace(usuario.Correo))
+        {
+            Formulario.Correo = usuario.Correo;
+        }
+    }
+
+    private void OnTipoVinculacionChanged()
+    {
+        UsuarioSeleccionadoId = 0;
+        UsuarioFormulario = new UsuarioVinculadoForm { Rol = "Odontólogo" };
+
+        if (TipoVinculacion == "CREAR_USUARIO")
+        {
+            Formulario.Nombres = string.Empty;
+            Formulario.Apellidos = string.Empty;
+            Formulario.Correo = string.Empty;
+        }
+    }
+
+    private async Task GuardarAsync()
+    {
+        try
+        {
+            Guardando = true;
+            if (Editando && IdOdontologoEditando.HasValue)
+            {
+                var dto = new ActualizacionOdontologoDto
+                {
+                    IdUsuario = Formulario.IdUsuario,
+                    Nombres = Formulario.Nombres,
+                    Apellidos = Formulario.Apellidos,
+                    NumeroColegiado = Formulario.NumeroColegiado,
+                    Especialidad = Formulario.Especialidad,
+                    Telefono = Formulario.Telefono,
+                    Correo = Formulario.Correo
+                };
+                await OdontologosApi.ActualizarAsync(IdOdontologoEditando.Value, dto);
+                ToastService.Mostrar("Éxito", "Odontólogo actualizado correctamente.", ToastTipo.Exito);
+                CancelarEdicion();
+                await CargarAsync();
+            }
+            else
+            {
+                if (TipoVinculacion == "VINCULAR" && UsuarioSeleccionadoId == 0)
+                {
+                    ToastService.Mostrar("Error", "Debe seleccionar un usuario sin odontólogo para vincular.", ToastTipo.Error);
+                    return;
+                }
+
+                if (TipoVinculacion == "CREAR_USUARIO")
+                {
+                    if (string.IsNullOrWhiteSpace(UsuarioFormulario.NombreCompleto) || string.IsNullOrWhiteSpace(UsuarioFormulario.NombreUsuario) || string.IsNullOrWhiteSpace(UsuarioFormulario.CorreoUsuario) || string.IsNullOrWhiteSpace(UsuarioFormulario.Password))
+                    {
+                        ToastService.Mostrar("Error", "Complete los datos obligatorios del usuario.", ToastTipo.Error);
+                        return;
+                    }
+
+                    var erroresPassword = PasswordPolicy.ObtenerErrores(UsuarioFormulario.Password);
+                    if (erroresPassword.Count > 0)
+                    {
+                        ToastService.Mostrar("Contraseña no válida", string.Join(" ", erroresPassword), ToastTipo.Error);
+                        return;
+                    }
+                }
+
+                var dtoVinculado = new CreacionOdontologoVinculadoDto
+                {
+                    TipoVinculacion = TipoVinculacion,
+                    IdUsuario = TipoVinculacion == "VINCULAR" ? UsuarioSeleccionadoId : null,
+                    NombreCompleto = UsuarioFormulario.NombreCompleto,
+                    NombreUsuario = UsuarioFormulario.NombreUsuario,
+                    CorreoUsuario = UsuarioFormulario.CorreoUsuario,
+                    Password = UsuarioFormulario.Password,
+                    Rol = "Odontólogo",
+                    Nombres = Formulario.Nombres,
+                    Apellidos = Formulario.Apellidos,
+                    NumeroColegiado = Formulario.NumeroColegiado,
+                    Especialidad = Formulario.Especialidad,
+                    Telefono = Formulario.Telefono,
+                    Correo = Formulario.Correo
+                };
+                await OdontologosApi.CrearVinculadoAsync(dtoVinculado);
+                ToastService.Mostrar("Éxito", "Odontólogo vinculado/creado correctamente.", ToastTipo.Exito);
+                CancelarEdicion();
+                await CargarAsync();
+                await CargarUsuariosSinOdontologoAsync();
+            }
+        }
+        catch (Exception ex)
+        {
+            ToastService.Mostrar("Error", ex.Message, ToastTipo.Error);
+        }
+        finally
+        {
+            Guardando = false;
+        }
+    }
+
+    private void Editar(OdontologoDto odontologo)
+    {
+        Editando = true;
+        IdOdontologoEditando = odontologo.IdOdontologo;
+        Formulario = new OdontologoForm
+        {
+            IdUsuario = odontologo.IdUsuario,
+            Nombres = odontologo.Nombres,
+            Apellidos = odontologo.Apellidos,
+            NumeroColegiado = odontologo.NumeroColegiado,
+            Especialidad = odontologo.Especialidad,
+            Telefono = odontologo.Telefono,
+            Correo = odontologo.Correo
+        };
+    }
+
+    private void CancelarEdicion()
+    {
+        Editando = false;
+        IdOdontologoEditando = null;
+        Formulario = new OdontologoForm();
+        TipoVinculacion = "VINCULAR";
+        UsuarioSeleccionadoId = 0;
+        UsuarioFormulario = new UsuarioVinculadoForm { Rol = "Odontólogo" };
+    }
+
+    private void SolicitarCambioEstado(OdontologoDto odontologo, bool activar)
+    {
+        OdontologoEstadoPendiente = odontologo;
+        EstadoPendienteActivo = activar;
+        MostrarConfirmacionEstado = true;
+    }
+
+    private void CerrarConfirmacionEstado()
+    {
+        if (ConfirmandoEstado)
+        {
+            return;
+        }
+
+        MostrarConfirmacionEstado = false;
+        OdontologoEstadoPendiente = null;
+    }
+
+    private async Task ConfirmarCambioEstadoAsync()
+    {
+        if (OdontologoEstadoPendiente is null)
+        {
+            return;
+        }
+
+        var odontologo = OdontologoEstadoPendiente;
+        var activar = EstadoPendienteActivo;
+
+        try
+        {
+            ConfirmandoEstado = true;
+            StateHasChanged();
+
+            if (activar)
+            {
+                await OdontologosApi.ActivarAsync(odontologo.IdOdontologo);
+                ToastService.Mostrar("Éxito", "Odontólogo activado correctamente.", ToastTipo.Exito);
+            }
+            else
+            {
+                await OdontologosApi.DesactivarAsync(odontologo.IdOdontologo);
+                ToastService.Mostrar("Éxito", "Odontólogo desactivado correctamente.", ToastTipo.Exito);
+            }
+
+            MostrarConfirmacionEstado = false;
+            OdontologoEstadoPendiente = null;
+            await CargarAsync();
+        }
+        catch (Exception ex)
+        {
+            ToastService.Mostrar("Error", ex.Message, ToastTipo.Error);
+        }
+        finally
+        {
+            ConfirmandoEstado = false;
+        }
+    }
+
+    private async Task AbrirHorarios(OdontologoDto odontologo)
+    {
+        OdontologoSeleccionado = odontologo;
+        ErrorHorarios = null;
+        HorariosConfiguracion = new List<HorarioItemDto>();
+        try
+        {
+            var existentes = await OdontologosApi.ObtenerHorariosAsync(odontologo.IdOdontologo);
+            for (int i = 1; i <= 7; i++)
+            {
+                var ex = existentes.FirstOrDefault(h => h.DiaSemana == i);
+                if (ex != null)
+                {
+                    HorariosConfiguracion.Add(new HorarioItemDto { DiaSemana = i, HoraInicio = ex.HoraInicio, HoraFin = ex.HoraFin, Activo = ex.Activo });
+                }
+                else
+                {
+                    HorariosConfiguracion.Add(new HorarioItemDto { DiaSemana = i, HoraInicio = "08:00", HoraFin = "17:00", Activo = false });
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            ToastService.Mostrar("Error", ex.Message, ToastTipo.Error);
+            for (int i = 1; i <= 7; i++)
+            {
+                HorariosConfiguracion.Add(new HorarioItemDto { DiaSemana = i, HoraInicio = "08:00", HoraFin = "17:00", Activo = false });
+            }
+        }
+        MostrarHorarios = true;
+    }
+
+    private async Task GuardarHorariosAsync()
+    {
+        if (OdontologoSeleccionado == null) return;
+
+        ErrorHorarios = ValidarHorarios();
+        if (ErrorHorarios is not null)
+        {
+            ToastService.Mostrar("Horario inválido", ErrorHorarios, ToastTipo.Error);
+            return;
+        }
+
+        try
+        {
+            GuardandoHorarios = true;
+            var dto = new ConfiguracionHorariosDto { Horarios = HorariosConfiguracion.ToList() };
+            await OdontologosApi.ConfigurarHorariosAsync(OdontologoSeleccionado.IdOdontologo, dto);
+            ToastService.Mostrar("Éxito", "Horarios configurados correctamente.", ToastTipo.Exito);
+            ErrorHorarios = null;
+            CerrarHorarios();
+        }
+        catch (Exception ex)
+        {
+            ToastService.Mostrar("Error", ex.Message, ToastTipo.Error);
+        }
+        finally
+        {
+            GuardandoHorarios = false;
+        }
+    }
+
+    private string? ValidarHorarios()
+    {
+        var activos = HorariosConfiguracion.Where(h => h.Activo).ToList();
+
+        foreach (var horario in activos)
+        {
+            if (string.Compare(horario.HoraInicio, horario.HoraFin, StringComparison.Ordinal) >= 0)
+            {
+                return $"En {NombreDia(horario.DiaSemana)}, la hora de inicio ({horario.HoraInicio}) debe ser anterior a la hora de fin ({horario.HoraFin}).";
+            }
+        }
+
+        foreach (var grupo in activos.GroupBy(h => h.DiaSemana))
+        {
+            var ordenados = grupo.OrderBy(h => MinutosDesdeMedianoche(h.HoraInicio)).ToList();
+
+            for (var i = 1; i < ordenados.Count; i++)
+            {
+                var anterior = ordenados[i - 1];
+                var actual = ordenados[i];
+                var inicioActual = MinutosDesdeMedianoche(actual.HoraInicio);
+                var finAnterior = MinutosDesdeMedianoche(anterior.HoraFin);
+
+                if (inicioActual < finAnterior)
+                {
+                    var finTraslape = Math.Min(MinutosDesdeMedianoche(actual.HoraFin), finAnterior);
+                    return $"Los horarios de {NombreDia(grupo.Key)} se traslapan entre {actual.HoraInicio} y {FormatearMinutos(finTraslape)}. Ajusta los turnos para que no se superpongan.";
+                }
+            }
+        }
+
+        return null;
+    }
+
+    private bool HorarioTraslapado(HorarioItemDto horario)
+    {
+        if (!horario.Activo)
+        {
+            return false;
+        }
+
+        var inicio = MinutosDesdeMedianoche(horario.HoraInicio);
+        var fin = MinutosDesdeMedianoche(horario.HoraFin);
+
+        return HorariosConfiguracion.Any(otro =>
+            !ReferenceEquals(otro, horario) &&
+            otro.Activo &&
+            otro.DiaSemana == horario.DiaSemana &&
+            inicio < MinutosDesdeMedianoche(otro.HoraFin) &&
+            fin > MinutosDesdeMedianoche(otro.HoraInicio));
+    }
+
+    private static string FormatearMinutos(int minutos) =>
+        $"{minutos / 60:00}:{minutos % 60:00}";
+
+    private void CerrarHorarios()
+    {
+        MostrarHorarios = false;
+        OdontologoSeleccionado = null;
+        HorariosConfiguracion.Clear();
+        ErrorHorarios = null;
+    }
+
+    private async Task AbrirTratamientos(OdontologoDto odontologo)
+    {
+        OdontologoSeleccionado = odontologo;
+        TratamientoAAsociarId = 0;
+        TratamientoSeleccionado = null;
+        BusquedaTratamiento = string.Empty;
+        MostrarOpcionesTratamiento = false;
+
+        await CargarCatalogoTratamientosAsync();
+        await CargarTratamientosAsociadosAsync();
+
+        MostrarTratamientos = true;
+    }
+
+    private async Task CargarTratamientosAsociadosAsync()
+    {
+        if (OdontologoSeleccionado == null) return;
+        try
+        {
+            TratamientosAsociados = (await OdontologosApi.ObtenerTratamientosAsociadosAsync(OdontologoSeleccionado.IdOdontologo)).ToList();
+        }
+        catch (Exception ex)
+        {
+            ToastService.Mostrar("Error", ex.Message, ToastTipo.Error);
+        }
+    }
+
+    private async Task AsociarTratamientoAsync()
+    {
+        if (OdontologoSeleccionado == null || TratamientoAAsociarId == 0)
+        {
+            return;
+        }
+
+        var tratamientoActivo = CatalogoTratamientos.Any(t =>
+            t.IdTratamiento == TratamientoAAsociarId && t.Activo);
+
+        if (!tratamientoActivo)
+        {
+            ToastService.Mostrar(
+                "Tratamiento no disponible",
+                "El tratamiento seleccionado está inactivo o ya no está disponible. Actualiza el catálogo y selecciona otro tratamiento.",
+                ToastTipo.Error);
+
+            TratamientoAAsociarId = 0;
+            TratamientoSeleccionado = null;
+            await CargarCatalogoTratamientosAsync();
+            return;
+        }
+
+        try
+        {
+            GuardandoTratamientos = true;
+            await OdontologosApi.AsociarTratamientoAsync(OdontologoSeleccionado.IdOdontologo, TratamientoAAsociarId);
+            ToastService.Mostrar("Éxito", "Tratamiento asociado correctamente.", ToastTipo.Exito);
+            TratamientoAAsociarId = 0;
+            TratamientoSeleccionado = null;
+            BusquedaTratamiento = string.Empty;
+            MostrarOpcionesTratamiento = false;
+            await CargarTratamientosAsociadosAsync();
+        }
+        catch (Exception ex)
+        {
+            ToastService.Mostrar("Error", ex.Message, ToastTipo.Error);
+        }
+        finally
+        {
+            GuardandoTratamientos = false;
+        }
+    }
+
+    private async Task AsociarTratamientoDirectoAsync(int idTratamiento)
+    {
+        if (OdontologoSeleccionado == null) return;
+
+        if (!CatalogoTratamientos.Any(t => t.IdTratamiento == idTratamiento && t.Activo))
+        {
+            ToastService.Mostrar("Tratamiento no disponible", "No se puede asociar un tratamiento inactivo.", ToastTipo.Error);
+            return;
+        }
+
+        try
+        {
+            await OdontologosApi.AsociarTratamientoAsync(OdontologoSeleccionado.IdOdontologo, idTratamiento);
+            ToastService.Mostrar("Éxito", "Tratamiento asociado correctamente.", ToastTipo.Exito);
+            await CargarTratamientosAsociadosAsync();
+        }
+        catch (Exception ex)
+        {
+            ToastService.Mostrar("Error", ex.Message, ToastTipo.Error);
+        }
+    }
+
+    private async Task DesasociarTratamientoAsync(int idTratamiento)
+    {
+        if (OdontologoSeleccionado == null) return;
+        try
+        {
+            await OdontologosApi.DesasociarTratamientoAsync(OdontologoSeleccionado.IdOdontologo, idTratamiento);
+            ToastService.Mostrar("Éxito", "Tratamiento desasociado correctamente.", ToastTipo.Exito);
+            await CargarTratamientosAsociadosAsync();
+        }
+        catch (Exception ex)
+        {
+            ToastService.Mostrar("Error", ex.Message, ToastTipo.Error);
+        }
+    }
+
+    private void CerrarTratamientos()
+    {
+        MostrarTratamientos = false;
+        OdontologoSeleccionado = null;
+        TratamientosAsociados.Clear();
+        TratamientoAAsociarId = 0;
+        TratamientoSeleccionado = null;
+        BusquedaTratamiento = string.Empty;
+        MostrarOpcionesTratamiento = false;
+    }
+
+    private void AbrirOpcionesTratamiento()
+    {
+        MostrarOpcionesTratamiento = true;
+    }
+
+    private void OnBusquedaTratamientoChanged()
+    {
+        MostrarOpcionesTratamiento = true;
+    }
+
+    private void SeleccionarTratamiento(TratamientoDto tratamiento)
+    {
+        if (!tratamiento.Activo)
+        {
+            ToastService.Mostrar("Tratamiento no disponible", "No se puede seleccionar un tratamiento inactivo.", ToastTipo.Error);
+            return;
+        }
+
+        TratamientoSeleccionado = tratamiento;
+        TratamientoAAsociarId = tratamiento.IdTratamiento;
+        BusquedaTratamiento = string.Empty;
+        MostrarOpcionesTratamiento = false;
+    }
+
+    private void LimpiarSeleccionTratamiento()
+    {
+        TratamientoSeleccionado = null;
+        TratamientoAAsociarId = 0;
+        BusquedaTratamiento = string.Empty;
+    }
+
+    private void AplicarJornadaEstandar()
+    {
+        foreach (var horario in HorariosConfiguracion)
+        {
+            horario.HoraInicio = "08:00";
+            horario.HoraFin = "17:00";
+        }
+    }
+
+    private void MarcarLaborables()
+    {
+        foreach (var horario in HorariosConfiguracion)
+        {
+            horario.Activo = horario.DiaSemana <= 5;
+            if (horario.Activo)
+            {
+                horario.HoraInicio = "08:00";
+                horario.HoraFin = "17:00";
+            }
+        }
+    }
+
+    private void LimpiarHorarios()
+    {
+        foreach (var horario in HorariosConfiguracion)
+        {
+            horario.Activo = false;
+        }
+    }
+
+    private static IReadOnlyList<string> CrearHorasDisponibles()
+    {
+        var horas = new List<string>();
+        for (var minuto = MinutoInicioCalendario; minuto <= MinutoFinCalendario; minuto += 30)
+        {
+            horas.Add($"{minuto / 60:00}:{minuto % 60:00}");
+        }
+        return horas;
+    }
+
+    private static int MinutosDesdeMedianoche(string? hora)
+    {
+        return TimeSpan.TryParse(hora, out var tiempo) ? (int)tiempo.TotalMinutes : 0;
+    }
+
+    private static bool HorarioInvalido(HorarioItemDto horario)
+    {
+        return horario.Activo
+            && string.CompareOrdinal(horario.HoraInicio, horario.HoraFin) >= 0;
+    }
+
+    private static double DuracionHoras(HorarioItemDto horario)
+    {
+        var minutos = Math.Max(0, MinutosDesdeMedianoche(horario.HoraFin) - MinutosDesdeMedianoche(horario.HoraInicio));
+        return minutos / 60.0;
+    }
+
+    private static string DuracionBloque(HorarioItemDto horario)
+    {
+        var minutos = Math.Max(0, MinutosDesdeMedianoche(horario.HoraFin) - MinutosDesdeMedianoche(horario.HoraInicio));
+        var horas = minutos / 60;
+        var resto = minutos % 60;
+        return resto == 0 ? $"{horas} h" : $"{horas} h {resto} min";
+    }
+
+    private static double PorcentajeHora(string hora)
+    {
+        var total = (double)(MinutoFinCalendario - MinutoInicioCalendario);
+        var minuto = Math.Clamp(MinutosDesdeMedianoche(hora), MinutoInicioCalendario, MinutoFinCalendario);
+        return (minuto - MinutoInicioCalendario) * 100.0 / total;
+    }
+
+    private static string EstiloBloqueCalendario(HorarioItemDto horario)
+    {
+        var total = (double)(MinutoFinCalendario - MinutoInicioCalendario);
+        var inicio = Math.Clamp(MinutosDesdeMedianoche(horario.HoraInicio), MinutoInicioCalendario, MinutoFinCalendario);
+        var fin = Math.Clamp(MinutosDesdeMedianoche(horario.HoraFin), MinutoInicioCalendario, MinutoFinCalendario);
+        var arriba = (inicio - MinutoInicioCalendario) * 100.0 / total;
+        var alto = Math.Max(2.0, (fin - inicio) * 100.0 / total);
+
+        return string.Format(
+            System.Globalization.CultureInfo.InvariantCulture,
+            "top:{0:0.##}%;height:{1:0.##}%;",
+            arriba,
+            alto);
+    }
+
+    private static string NombreDiaCorto(int dia) => dia switch
+    {
+        1 => "Lun",
+        2 => "Mar",
+        3 => "Mié",
+        4 => "Jue",
+        5 => "Vie",
+        6 => "Sáb",
+        7 => "Dom",
+        _ => dia.ToString()
+    };
+
+    private static readonly System.Globalization.CultureInfo CulturaMonetaria =
+        System.Globalization.CultureInfo.GetCultureInfo("es-CR");
+
+    private static string FormatearMoneda(decimal monto) =>
+        "₡" + monto.ToString("N2", CulturaMonetaria);
+
+    private static string NombreDia(int dia) => dia switch
+    {
+        1 => "Lunes",
+        2 => "Martes",
+        3 => "Miércoles",
+        4 => "Jueves",
+        5 => "Viernes",
+        6 => "Sábado",
+        7 => "Domingo",
+        _ => dia.ToString()
+    };
+
+    public class OdontologoForm
+    {
+        public int? IdUsuario { get; set; }
+
+        [Required(ErrorMessage = "Los nombres son obligatorios.")]
+        [StringLength(100, ErrorMessage = "Los nombres no pueden superar los 100 caracteres.")]
+        public string Nombres { get; set; } = string.Empty;
+
+        [Required(ErrorMessage = "Los apellidos son obligatorios.")]
+        [StringLength(100, ErrorMessage = "Los apellidos no pueden superar los 100 caracteres.")]
+        public string Apellidos { get; set; } = string.Empty;
+
+        [Required(ErrorMessage = "El número de colegiado es obligatorio.")]
+        [StringLength(30, ErrorMessage = "El número de colegiado no puede superar los 30 caracteres.")]
+        public string NumeroColegiado { get; set; } = string.Empty;
+
+        [StringLength(80, ErrorMessage = "La especialidad no puede superar los 80 caracteres.")]
+        public string? Especialidad { get; set; }
+
+        [StringLength(20, ErrorMessage = "El teléfono no puede superar los 20 caracteres.")]
+        public string? Telefono { get; set; }
+
+        [EmailAddress(ErrorMessage = "El formato del correo electrónico no es válido.")]
+        [StringLength(150, ErrorMessage = "El correo no puede superar los 150 caracteres.")]
+        public string? Correo { get; set; }
+    }
+
+    public class UsuarioVinculadoForm : IValidatableObject
+    {
+        [Required(ErrorMessage = "El nombre completo del usuario es obligatorio.")]
+        [StringLength(150, ErrorMessage = "El nombre completo no puede superar los 150 caracteres.")]
+        public string? NombreCompleto { get; set; }
+
+        [Required(ErrorMessage = "El nombre de usuario es obligatorio.")]
+        [StringLength(50, ErrorMessage = "El nombre de usuario no puede superar los 50 caracteres.")]
+        public string? NombreUsuario { get; set; }
+
+        [Required(ErrorMessage = "El correo del usuario es obligatorio.")]
+        [EmailAddress(ErrorMessage = "El formato del correo no es válido.")]
+        [StringLength(150, ErrorMessage = "El correo no puede superar los 150 caracteres.")]
+        public string? CorreoUsuario { get; set; }
+
+        [Required(ErrorMessage = "La contraseña es obligatoria.")]
+        [StringLength(72, ErrorMessage = "La contraseña no puede superar los 72 caracteres.")]
+        public string? Password { get; set; }
+
+        public string? Rol { get; set; } = "Odontólogo";
+
+        public IEnumerable<ValidationResult> Validate(ValidationContext validationContext)
+        {
+            if (string.IsNullOrWhiteSpace(Password))
+            {
+                yield break;
+            }
+
+            foreach (var error in PasswordPolicy.ObtenerErrores(Password))
+            {
+                yield return new ValidationResult(error, new[] { nameof(Password) });
+            }
+        }
+    }
+}

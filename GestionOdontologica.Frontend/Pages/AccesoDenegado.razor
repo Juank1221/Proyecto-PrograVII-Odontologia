@@ -1,0 +1,30 @@
+@page "/acceso-denegado"
+@attribute [Authorize]
+
+<PageTitle>Acceso denegado | OdontoCare</PageTitle>
+
+<div class="page">
+    <section class="page-heading" aria-labelledby="page-title">
+        <div class="page-heading__copy">
+            <h1 id="page-title">Acceso denegado</h1>
+            <p>Tu rol no tiene permisos para acceder a esta sección.</p>
+        </div>
+    </section>
+
+    <section class="card placeholder-card" aria-labelledby="denied-title">
+        <div class="table-state">
+            <div class="table-state__icon" aria-hidden="true">
+                <svg class="icon"><use href="#icon-lock"></use></svg>
+            </div>
+            <strong id="denied-title">No tienes autorización para este módulo</strong>
+            <p>
+                Si necesitas realizar esta operación, solicita al administrador que
+                asigne el permiso correspondiente a tu rol.
+            </p>
+            <a class="button button--primary" href="inicio">
+                <svg class="icon" aria-hidden="true"><use href="#icon-home"></use></svg>
+                Volver al inicio
+            </a>
+        </div>
+    </section>
+</div>

@@ -1,0 +1,441 @@
+@using GestionOdontologica.Frontend.Models
+
+<section class="card table-card" aria-labelledby="table-title">
+    <div class="table-card__header">
+        <div class="table-title-group">
+            <div class="icon-tile icon-tile--soft" aria-hidden="true">
+                <svg class="icon"><use href="#icon-users"></use></svg>
+            </div>
+            <div>
+                <div class="title-line">
+                    <h2 id="table-title">Usuarios</h2>
+                    <span class="count-badge">@ConteoVisible</span>
+                </div>
+                <p>Mantenimiento y control de accesos al sistema</p>
+            </div>
+        </div>
+
+        <div class="table-actions">
+            <label class="search-box" for="search-input">
+                <svg class="icon search-icon" aria-hidden="true"><use href="#icon-search"></use></svg>
+                <input id="search-input"
+                       type="search"
+                       placeholder="Buscar por nombre, correo, usuario..."
+                       autocomplete="off"
+                       @bind="Filtro"
+                       @bind:event="oninput" />
+                @if (!string.IsNullOrWhiteSpace(Filtro))
+                {
+                    <button type="button" class="btn-clear-search" aria-label="Limpiar búsqueda" @onclick="() => Filtro = string.Empty">
+                        <svg class="icon"><use href="#icon-x"></use></svg>
+                    </button>
+                }
+            </label>
+
+            <button type="button"
+                    class="icon-button icon-button--soft @(Cargando ? "is-spinning" : string.Empty)"
+                    aria-label="Actualizar listado"
+                    title="Actualizar listado"
+                    disabled="@Cargando"
+                    @onclick="RefrescarAsync">
+                <svg class="icon"><use href="#icon-refresh"></use></svg>
+            </button>
+        </div>
+    </div>
+
+    <!-- Barra de Filtros Profesional -->
+    <div class="table-toolbar">
+        <div class="filter-segmented" role="tablist" aria-label="Filtrar por estado">
+            <button type="button"
+                    role="tab"
+                    aria-selected="@(FiltroEstado == "todos" ? "true" : "false")"
+                    class="filter-tab @(FiltroEstado == "todos" ? "is-active" : "")"
+                    @onclick='() => FiltroEstado = "todos"'>
+                <span>Todos</span>
+                <span class="filter-count">@TotalGeneral</span>
+            </button>
+            <button type="button"
+                    role="tab"
+                    aria-selected="@(FiltroEstado == "activos" ? "true" : "false")"
+                    class="filter-tab @(FiltroEstado == "activos" ? "is-active" : "")"
+                    @onclick='() => FiltroEstado = "activos"'>
+                <span class="status-dot status-dot--active" aria-hidden="true"></span>
+                <span>Activos</span>
+                <span class="filter-count">@TotalActivos</span>
+            </button>
+            <button type="button"
+                    role="tab"
+                    aria-selected="@(FiltroEstado == "inactivos" ? "true" : "false")"
+                    class="filter-tab @(FiltroEstado == "inactivos" ? "is-active" : "")"
+                    @onclick='() => FiltroEstado = "inactivos"'>
+                <span class="status-dot status-dot--inactive" aria-hidden="true"></span>
+                <span>Inactivos</span>
+                <span class="filter-count">@TotalInactivos</span>
+            </button>
+        </div>
+
+        <div class="filter-group-right">
+            <div class="filter-role-selector">
+                <svg class="icon filter-icon" aria-hidden="true"><use href="#icon-shield"></use></svg>
+                <select class="filter-role-select" aria-label="Filtrar por rol" @bind="FiltroRol">
+                    <option value="">Todos los roles</option>
+                    <option value="Administrador">Administrador</option>
+                    <option value="Odontólogo">Odontólogo</option>
+                    <option value="Recepcionista">Recepcionista</option>
+                </select>
+                <svg class="icon chevron-icon" aria-hidden="true"><use href="#icon-chevron-right"></use></svg>
+            </div>
+
+            @if (TieneFiltrosActivos)
+            {
+                <button type="button" class="btn-clear-filters" @onclick="LimpiarFiltros" title="Restablecer filtros">
+                    <svg class="icon"><use href="#icon-x"></use></svg>
+                    <span>Limpiar filtros</span>
+                </button>
+            }
+        </div>
+    </div>
+
+    <div class="table-wrap" aria-live="polite">
+        <table class="users-table">
+            <thead>
+                <tr>
+                    <th scope="col" class="col-user">Usuario</th>
+                    <th scope="col" class="col-role">Rol</th>
+                    <th scope="col" class="col-status">Estado</th>
+                    <th scope="col" class="col-actions">Acciones</th>
+                </tr>
+            </thead>
+            <tbody>
+                @if (Cargando)
+                {
+                    @for (var i = 0; i < 4; i++)
+                    {
+                        <tr class="skeleton-row" aria-hidden="true">
+                            <td class="col-user">
+                                <div class="user-cell">
+                                    <span class="skeleton skeleton--avatar"></span>
+                                    <div class="skeleton-stack">
+                                        <span class="skeleton skeleton--line skeleton--line-lg"></span>
+                                        <span class="skeleton skeleton--line skeleton--line-sm"></span>
+                                    </div>
+                                </div>
+                            </td>
+                            <td class="col-role"><span class="skeleton skeleton--badge"></span></td>
+                            <td class="col-status"><span class="skeleton skeleton--badge"></span></td>
+                            <td class="col-actions"><span class="skeleton skeleton--badge"></span></td>
+                        </tr>
+                    }
+                }
+                else if (Error is not null)
+                {
+                    <tr>
+                        <td colspan="4">
+                            <div class="table-state table-state--error" role="alert">
+                                <div class="table-state__icon" aria-hidden="true">
+                                    <svg class="icon"><use href="#icon-alert"></use></svg>
+                                </div>
+                                <strong>No se pudo cargar la lista</strong>
+                                <p>@Error</p>
+                                <button type="button" class="button button--secondary" @onclick="ReintentarAsync">
+                                    <svg class="icon"><use href="#icon-refresh"></use></svg>
+                                    Reintentar
+                                </button>
+                            </div>
+                        </td>
+                    </tr>
+                }
+                else if (Usuarios.Count == 0)
+                {
+                    <tr>
+                        <td colspan="4">
+                            <div class="table-state">
+                                <div class="table-state__icon" aria-hidden="true">
+                                    <svg class="icon"><use href="#icon-users"></use></svg>
+                                </div>
+                                <strong>Aún no hay usuarios</strong>
+                                <p>Utiliza el formulario de la izquierda para registrar al primer integrante del equipo.</p>
+                            </div>
+                        </td>
+                    </tr>
+                }
+                else if (Filtrados.Count == 0)
+                {
+                    <tr>
+                        <td colspan="4">
+                            <div class="table-state">
+                                <div class="table-state__icon" aria-hidden="true">
+                                    <svg class="icon"><use href="#icon-search"></use></svg>
+                                </div>
+                                <strong>Sin resultados</strong>
+                                <p>No se encontraron usuarios con los filtros aplicados.</p>
+                                <button type="button" class="button button--secondary" @onclick="LimpiarFiltros">
+                                    Restablecer filtros
+                                </button>
+                            </div>
+                        </td>
+                    </tr>
+                }
+                else
+                {
+                    @foreach (var usuario in Visibles)
+                    {
+                        var esEditando = IdUsuarioEditando.HasValue && IdUsuarioEditando.Value == usuario.Usuario.IdUsuario;
+                        <tr @key="usuario.Usuario.IdUsuario" class="user-row @usuario.ClaseFila @(esEditando ? "user-row--editing" : string.Empty)">
+                            <td class="col-user">
+                                <div class="user-cell">
+                                    <div class="avatar @usuario.ClaseTono" aria-hidden="true">@usuario.Iniciales</div>
+                                    <div class="user-cell__copy">
+                                        <div class="user-cell__name">
+                                            <span class="user-name">@usuario.Nombre</span>
+                                            @if (esEditando)
+                                            {
+                                                <span class="editing-pill" title="Editando actualmente este registro">Editando</span>
+                                            }
+                                        </div>
+                                        <span class="user-cell__meta">@usuario.Meta</span>
+                                    </div>
+                                </div>
+                            </td>
+                            <td class="col-role">
+                                <span class="role-badge @usuario.ClaseRol">
+                                    <span class="role-badge__dot" aria-hidden="true"></span>
+                                    @usuario.Rol
+                                </span>
+                            </td>
+                            <td class="col-status">
+                                <span class="status-pill @(usuario.Activo ? "status-pill--active" : "status-pill--inactive")">
+                                    <span aria-hidden="true"></span>
+                                    @(usuario.Activo ? "Activo" : "Inactivo")
+                                </span>
+                            </td>
+                            <td class="col-actions">
+                                <div class="action-buttons-group">
+                                    <button type="button"
+                                            class="btn-action btn-action--edit @(esEditando ? "is-selected" : string.Empty)"
+                                            title="Editar datos de @usuario.Nombre"
+                                            aria-label="Editar datos de @usuario.Nombre"
+                                            @onclick="() => EditarUsuario(usuario.Usuario)">
+                                        <svg class="icon" aria-hidden="true"><use href="#icon-edit"></use></svg>
+                                        <span>Editar</span>
+                                    </button>
+
+                                    @if (usuario.Activo)
+                                    {
+                                        @if (usuario.EsAdministrador)
+                                        {
+                                            <button type="button"
+                                                    class="btn-action btn-action--locked"
+                                                    title="El usuario Administrador está protegido: no puede desactivarse."
+                                                    aria-label="El usuario Administrador está protegido"
+                                                    disabled>
+                                                <svg class="icon" aria-hidden="true"><use href="#icon-lock"></use></svg>
+                                                <span>Protegido</span>
+                                            </button>
+                                        }
+                                        else
+                                        {
+                                            <button type="button"
+                                                    class="btn-action btn-action--danger"
+                                                    title="Dar de baja a @usuario.Nombre"
+                                                    aria-label="Dar de baja a @usuario.Nombre"
+                                                    @onclick="() => DesactivarUsuario(usuario.Usuario)">
+                                                <svg class="icon" aria-hidden="true"><use href="#icon-trash"></use></svg>
+                                                <span>Eliminar</span>
+                                            </button>
+                                        }
+                                    }
+                                    else
+                                    {
+                                        <button type="button"
+                                                class="btn-action btn-action--success"
+                                                title="Reactivar acceso a @usuario.Nombre"
+                                                aria-label="Reactivar acceso a @usuario.Nombre"
+                                                @onclick="() => ReactivarUsuario(usuario.Usuario)">
+                                            <svg class="icon" aria-hidden="true"><use href="#icon-user-check"></use></svg>
+                                            <span>Activar</span>
+                                        </button>
+                                    }
+                                </div>
+                            </td>
+                        </tr>
+                    }
+                }
+            </tbody>
+        </table>
+    </div>
+
+    <DataPagination TotalRegistros="Filtrados.Count"
+                    PaginaActual="_paginacion.PaginaEfectiva(Filtrados.Count)"
+                    TamanoPagina="_paginacion.Tamano"
+                    Singular="usuario"
+                    Plural="usuarios"
+                    OnPaginaCambiada="IrAPagina"
+                    OnTamanoCambiado="CambiarTamanoPagina" />
+
+    <div class="table-footer">
+        <span>@Resumen</span>
+        <span class="table-footer__hint">Datos sincronizados con Oracle Database</span>
+    </div>
+</section>
+
+@code {
+    private readonly Paginacion _paginacion = new();
+
+    private string _filtro = string.Empty;
+    private string _filtroEstado = "todos";
+    private string _filtroRol = string.Empty;
+
+    private string Filtro
+    {
+        get => _filtro;
+        set
+        {
+            _filtro = value;
+            _paginacion.Reiniciar();
+        }
+    }
+
+    private string FiltroEstado
+    {
+        get => _filtroEstado;
+        set
+        {
+            _filtroEstado = value;
+            _paginacion.Reiniciar();
+        }
+    }
+
+    private string FiltroRol
+    {
+        get => _filtroRol;
+        set
+        {
+            _filtroRol = value;
+            _paginacion.Reiniciar();
+        }
+    }
+
+    [Parameter]
+    public IReadOnlyList<UsuarioVista> Usuarios { get; set; } = Array.Empty<UsuarioVista>();
+
+    [Parameter]
+    public bool Cargando { get; set; }
+
+    [Parameter]
+    public string? Error { get; set; }
+
+    [Parameter]
+    public int? IdUsuarioEditando { get; set; }
+
+    [Parameter]
+    public EventCallback<UsuarioDto> OnEditar { get; set; }
+
+    [Parameter]
+    public EventCallback<UsuarioDto> OnDesactivar { get; set; }
+
+    [Parameter]
+    public EventCallback<UsuarioDto> OnReactivar { get; set; }
+
+    [Parameter]
+    public EventCallback OnReintentar { get; set; }
+
+    [Parameter]
+    public EventCallback OnRefrescar { get; set; }
+
+    private int TotalGeneral => Usuarios.Count;
+    private int TotalActivos => Usuarios.Count(u => u.Activo);
+    private int TotalInactivos => Usuarios.Count(u => !u.Activo);
+
+    private bool TieneFiltrosActivos =>
+        !string.IsNullOrWhiteSpace(_filtro)
+        || _filtroEstado != "todos"
+        || !string.IsNullOrWhiteSpace(_filtroRol);
+
+    private List<UsuarioVista> Filtrados => Filtrar();
+
+    private List<UsuarioVista> Visibles => _paginacion.Aplicar(Filtrados).ToList();
+
+    private string ConteoVisible => Cargando || Error is not null
+        ? "—"
+        : Filtrados.Count.ToString();
+
+    private string Resumen
+    {
+        get
+        {
+            if (Cargando) return "Cargando usuarios...";
+            if (Error is not null) return "No se pudo cargar el listado";
+
+            var total = Usuarios.Count;
+            if (total == 0) return "Sin usuarios registrados";
+
+            var visibles = Filtrados.Count;
+            if (TieneFiltrosActivos)
+            {
+                return $"{visibles} de {total} usuarios coinciden con los filtros";
+            }
+
+            return $"{total} {(total == 1 ? "usuario registrado" : "usuarios registrados")}";
+        }
+    }
+
+    private List<UsuarioVista> Filtrar()
+    {
+        var termino = _filtro.Trim();
+        var resultado = Usuarios.AsEnumerable();
+
+        if (termino.Length > 0)
+        {
+            resultado = resultado.Where(u =>
+                Contiene(u.Nombre, termino)
+                || Contiene(u.Usuario.NombreUsuario, termino)
+                || Contiene(u.Usuario.Correo, termino)
+                || Contiene(u.Rol, termino));
+        }
+
+        if (_filtroEstado == "activos")
+        {
+            resultado = resultado.Where(u => u.Activo);
+        }
+        else if (_filtroEstado == "inactivos")
+        {
+            resultado = resultado.Where(u => !u.Activo);
+        }
+
+        if (!string.IsNullOrWhiteSpace(_filtroRol))
+        {
+            resultado = resultado.Where(u => string.Equals(u.Rol, _filtroRol, StringComparison.OrdinalIgnoreCase));
+        }
+
+        return resultado.ToList();
+    }
+
+    private static bool Contiene(string? valor, string termino)
+    {
+        return !string.IsNullOrEmpty(valor)
+            && valor.Contains(termino, StringComparison.CurrentCultureIgnoreCase);
+    }
+
+    private void LimpiarFiltros()
+    {
+        _filtro = string.Empty;
+        _filtroEstado = "todos";
+        _filtroRol = string.Empty;
+        _paginacion.Reiniciar();
+    }
+
+    private void IrAPagina(int pagina) => _paginacion.IrA(pagina, Filtrados.Count);
+
+    private void CambiarTamanoPagina(int tamano) => _paginacion.CambiarTamano(tamano);
+
+    private Task EditarUsuario(UsuarioDto usuario) => OnEditar.InvokeAsync(usuario);
+
+    private Task DesactivarUsuario(UsuarioDto usuario) => OnDesactivar.InvokeAsync(usuario);
+
+    private Task ReactivarUsuario(UsuarioDto usuario) => OnReactivar.InvokeAsync(usuario);
+
+    private Task ReintentarAsync() => OnReintentar.InvokeAsync();
+
+    private Task RefrescarAsync() => OnRefrescar.InvokeAsync();
+}

@@ -1,0 +1,41 @@
+@implements IDisposable
+@inject ThemeService Tema
+
+<button type="button"
+        class="theme-toggle @ClaseAdicional"
+        title="@Titulo"
+        aria-label="@Titulo"
+        aria-pressed="@(Tema.ModoOscuro ? "true" : "false")"
+        @onclick="AlternarAsync">
+    <svg class="icon" aria-hidden="true">
+        <use href="@(Tema.ModoOscuro ? "#icon-sun" : "#icon-moon")"></use>
+    </svg>
+    <span class="theme-toggle__label">@(Tema.ModoOscuro ? "Modo claro" : "Modo oscuro")</span>
+</button>
+
+@code {
+    [Parameter]
+    public string ClaseAdicional { get; set; } = string.Empty;
+
+    private string Titulo => Tema.ModoOscuro
+        ? "Cambiar a modo claro"
+        : "Cambiar a modo oscuro";
+
+    protected override async Task OnInitializedAsync()
+    {
+        Tema.OnChange += AlCambiarTema;
+        await Tema.InicializarAsync();
+    }
+
+    public void Dispose()
+    {
+        Tema.OnChange -= AlCambiarTema;
+    }
+
+    private void AlCambiarTema()
+    {
+        _ = InvokeAsync(StateHasChanged);
+    }
+
+    private Task AlternarAsync() => Tema.AlternarAsync();
+}

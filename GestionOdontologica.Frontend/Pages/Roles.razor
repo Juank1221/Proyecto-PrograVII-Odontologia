@@ -1,0 +1,1079 @@
+@page "/roles"
+@attribute [Authorize(Roles = "Administrador")]
+@implements IDisposable
+@inject RolesApiService Api
+@inject ToastService Toasts
+@inject ApiStatusService ApiStatus
+
+<PageTitle>Roles | OdontoCare</PageTitle>
+
+<style>
+    /* =========================================
+       TABLA DE ROLES - ESTILOS ESPECÍFICOS
+       ========================================= */
+
+    .roles-page .roles-table {
+        width: 100%;
+        min-width: 1080px;
+        table-layout: fixed;
+    }
+
+    .roles-page .roles-table th:nth-child(1),
+    .roles-page .roles-table td:nth-child(1) {
+        width: 18% !important;
+    }
+
+    .roles-page .roles-table th:nth-child(2),
+    .roles-page .roles-table td:nth-child(2) {
+        width: 27% !important;
+    }
+
+    .roles-page .roles-table th:nth-child(3),
+    .roles-page .roles-table td:nth-child(3) {
+        width: 13% !important;
+    }
+
+    .roles-page .roles-table th:nth-child(4),
+    .roles-page .roles-table td:nth-child(4) {
+        width: 15% !important;
+    }
+
+    .roles-page .roles-table th:nth-child(5),
+    .roles-page .roles-table td:nth-child(5) {
+        width: 27% !important;
+    }
+
+    .roles-page .roles-table .role-name {
+        display: block;
+        width: 100%;
+        min-width: 0;
+        margin: 0;
+        color: #16353c;
+        font-size: 12.7px;
+        font-weight: 650;
+        line-height: 1.35;
+        white-space: normal !important;
+        overflow: visible !important;
+        overflow-wrap: anywhere;
+        word-break: normal;
+        text-overflow: clip !important;
+    }
+
+    .roles-page .roles-table .role-description {
+        display: block;
+        width: 100%;
+        min-width: 0;
+        margin: 0;
+        color: #16353c;
+        font-size: 12.7px;
+        font-weight: 400 !important;
+        line-height: 1.45;
+        white-space: normal !important;
+        overflow: visible !important;
+        overflow-wrap: anywhere;
+        word-break: normal;
+        text-overflow: clip !important;
+    }
+
+    .roles-page .roles-table .role-name-cell,
+    .roles-page .roles-table .role-description-cell {
+        min-width: 0;
+        vertical-align: middle;
+        white-space: normal !important;
+        overflow: visible;
+    }
+
+    .roles-page .roles-table .role-name-cell .user-cell__copy {
+        min-width: 0;
+        overflow: visible;
+    }
+
+    .roles-page .roles-table th:nth-child(3),
+    .roles-page .roles-table td:nth-child(3),
+    .roles-page .roles-table th:nth-child(4),
+    .roles-page .roles-table td:nth-child(4) {
+        white-space: nowrap;
+    }
+
+    .roles-page .roles-table th:nth-child(5),
+    .roles-page .roles-table td:nth-child(5) {
+        white-space: normal;
+    }
+
+    .roles-page .roles-table .action-buttons-group {
+        display: flex;
+        align-items: center;
+        justify-content: flex-end;
+        gap: 7px;
+        row-gap: 6px;
+        width: 100%;
+        min-width: 0;
+        flex-wrap: wrap;
+        white-space: normal;
+    }
+
+    .roles-page .roles-table .btn-action {
+        flex: 0 0 auto;
+    }
+
+    @@media (max-width: 900px) {
+        .roles-page .roles-table {
+            min-width: 1080px;
+        }
+    }
+</style>
+
+
+<div class="page roles-page">
+    <section class="page-heading" aria-labelledby="page-title">
+        <div class="page-heading__copy">
+            <h1 id="page-title">Roles</h1>
+            <p>Administra los perfiles y controla los accesos al sistema odontológico.</p>
+        </div>
+
+        <div class="heading-meta" aria-label="Resumen">
+            <div class="meta-card">
+                <span>Total roles</span>
+                <strong>@ConteoTotal</strong>
+            </div>
+            <div class="meta-card">
+                <span>Activos</span>
+                <strong class="text-success">@ConteoActivos</strong>
+            </div>
+            <div class="meta-card">
+                <span>Estado API</span>
+                <strong class="meta-status @ApiStatus.ClaseCss">
+                    <span class="api-dot"></span>
+                    <span>@ApiStatus.TextoMeta</span>
+                </strong>
+            </div>
+        </div>
+    </section>
+
+    <div class="workspace-grid roles-workspace">
+        <section class="card form-card @(EsModoEdicion ? "form-card--editing" : string.Empty)"
+                 aria-labelledby="form-title">
+
+            <div class="card__header">
+                <div class="icon-tile @(EsModoEdicion ? "icon-tile--accent" : "icon-tile--primary")"
+                     aria-hidden="true">
+                    <svg class="icon">
+                        <use href="@(EsModoEdicion ? "#icon-edit" : "#icon-plus")"></use>
+                    </svg>
+                </div>
+
+                <div class="card-header-copy">
+                    <div class="card-header-title-row">
+                        <h2 id="form-title">
+                            @(EsModoEdicion ? "Editar rol" : "Agregar rol")
+                        </h2>
+
+                        @if (EsModoEdicion && _rolAEditar is not null)
+                        {
+                            <span class="edit-badge">ID #@_rolAEditar.IdRol</span>
+                        }
+                    </div>
+
+                    <p>
+                        @(EsModoEdicion
+                            ? $"Modifica la información de {_rolAEditar?.NombreRol}."
+                            : "Registra un nuevo perfil de acceso.")
+                    </p>
+                </div>
+            </div>
+
+            @if (EsModoEdicion)
+            {
+                <div class="editing-banner" role="status">
+                    <div class="editing-banner__info">
+                        <svg class="icon">
+                            <use href="#icon-info"></use>
+                        </svg>
+                        <span>
+                            Editando <strong>@_rolAEditar?.NombreRol</strong>
+                        </span>
+                    </div>
+
+                    <button type="button"
+                            class="btn-link"
+                            disabled="@_guardando"
+                            @onclick="CancelarEdicion">
+                        Descartar cambios
+                    </button>
+                </div>
+            }
+
+            <EditForm Model="_modelo"
+                      OnValidSubmit="GuardarAsync"
+                      class="usuario-form"
+                      aria-busy="@(_guardando ? "true" : "false")">
+
+                <DataAnnotationsValidator />
+
+                <div class="@ClaseCampo(nameof(RolFormulario.NombreRol))">
+                    <label for="nombreRol">Nombre del rol *</label>
+
+                    <InputText id="nombreRol"
+                               @bind-Value="_modelo.NombreRol"
+                               placeholder="Ej. Administrador"
+                               maxlength="50"
+                               disabled="@_guardando"
+                               autocomplete="off" />
+
+                    <ValidationMessage For="() => _modelo.NombreRol" />
+                </div>
+
+                <div class="@ClaseCampo(nameof(RolFormulario.Descripcion))">
+                    <label for="descripcionRol">Descripción</label>
+
+                    <InputTextArea id="descripcionRol"
+                                   @bind-Value="_modelo.Descripcion"
+                                   placeholder="Describe las funciones de este perfil..."
+                                   maxlength="250"
+                                   disabled="@_guardando"
+                                   rows="4" />
+
+                    <ValidationMessage For="() => _modelo.Descripcion" />
+                    <span class="field-hint">Máximo 250 caracteres.</span>
+                </div>
+
+                <div class="field">
+                    <label>Estado del rol</label>
+
+                    <div class="status-toggle-pill-group"
+                         role="radiogroup"
+                         aria-label="Estado del rol">
+
+                        <button type="button"
+                                class="status-pill-btn @(_modelo.Activo ? "is-active" : "")"
+                                disabled="@_guardando"
+                                aria-pressed="@_modelo.Activo"
+                                @onclick="() => _modelo.Activo = true">
+                            <span class="status-dot status-dot--active"></span>
+                            <span>Activo</span>
+                        </button>
+
+                        <button type="button"
+                                class="status-pill-btn @(!_modelo.Activo ? "is-inactive" : "")"
+                                disabled="@_guardando"
+                                aria-pressed="@(!_modelo.Activo)"
+                                @onclick="() => _modelo.Activo = false">
+                            <span class="status-dot status-dot--inactive"></span>
+                            <span>Inactivo</span>
+                        </button>
+                    </div>
+                </div>
+
+                @if (!string.IsNullOrWhiteSpace(_mensajeFeedback))
+                {
+                    <p class="form-feedback @ClaseFeedback" role="alert">
+                        @_mensajeFeedback
+                    </p>
+                }
+
+                <div class="form-actions-row">
+                    @if (EsModoEdicion)
+                    {
+                        <button type="button"
+                                class="button button--secondary"
+                                disabled="@_guardando"
+                                @onclick="CancelarEdicion">
+                            Cancelar
+                        </button>
+                    }
+
+                    <button type="submit"
+                            class="button button--primary"
+                            disabled="@_guardando"
+                            aria-busy="@(_guardando ? "true" : "false")">
+
+                        @if (_guardando)
+                        {
+                            <span class="button__spinner" aria-hidden="true"></span>
+                        }
+
+                        <span class="button__label">
+                            @(EsModoEdicion
+                                ? (_guardando ? "Guardando..." : "Guardar cambios")
+                                : (_guardando ? "Registrando..." : "Agregar rol"))
+                        </span>
+                    </button>
+                </div>
+            </EditForm>
+        </section>
+                <section class="card table-card roles-list-card"
+                 aria-labelledby="roles-list-title">
+
+            <div class="table-card__header">
+                <div class="table-title-group">
+                    <div class="icon-tile icon-tile--soft" aria-hidden="true">
+                        <svg class="icon">
+                            <use href="#icon-shield"></use>
+                        </svg>
+                    </div>
+
+                    <div>
+                        <div class="title-line">
+                            <h2 id="roles-list-title">Roles registrados</h2>
+                            <span class="count-badge">@ConteoVisible</span>
+                        </div>
+                        <p>Consulta, modifica y administra los perfiles existentes.</p>
+                    </div>
+                </div>
+
+                <div class="table-actions">
+                    <label class="search-box" for="roles-search-input">
+                        <svg class="icon search-icon" aria-hidden="true">
+                            <use href="#icon-search"></use>
+                        </svg>
+
+                        <input id="roles-search-input"
+                               type="search"
+                               placeholder="Buscar por nombre o descripción..."
+                               autocomplete="off"
+                               @bind="Busqueda"
+                               @bind:event="oninput" />
+
+                        @if (!string.IsNullOrWhiteSpace(Busqueda))
+                        {
+                            <button type="button"
+                                    class="btn-clear-search"
+                                    aria-label="Limpiar búsqueda"
+                                    @onclick="LimpiarBusqueda">
+                                <svg class="icon">
+                                    <use href="#icon-x"></use>
+                                </svg>
+                            </button>
+                        }
+                    </label>
+
+                    <button type="button"
+                            class="icon-button icon-button--soft @(_cargando ? "is-spinning" : string.Empty)"
+                            aria-label="Actualizar listado"
+                            title="Actualizar listado"
+                            disabled="@_cargando"
+                            @onclick="CargarRolesAsync">
+                        <svg class="icon">
+                            <use href="#icon-refresh"></use>
+                        </svg>
+                    </button>
+                </div>
+            </div>
+
+            <div class="table-toolbar">
+                <div class="filter-segmented"
+                     role="tablist"
+                     aria-label="Filtrar roles por estado">
+
+                    <button type="button"
+                            role="tab"
+                            aria-selected="@(FiltroEstado == "todos" ? "true" : "false")"
+                            class="filter-tab @(FiltroEstado == "todos" ? "is-active" : string.Empty)"
+                            @onclick='() => FiltroEstado = "todos"'>
+                        <span>Todos</span>
+                        <span class="filter-count">@TotalGeneral</span>
+                    </button>
+
+                    <button type="button"
+                            role="tab"
+                            aria-selected="@(FiltroEstado == "activos" ? "true" : "false")"
+                            class="filter-tab @(FiltroEstado == "activos" ? "is-active" : string.Empty)"
+                            @onclick='() => FiltroEstado = "activos"'>
+                        <span class="status-dot status-dot--active" aria-hidden="true"></span>
+                        <span>Activos</span>
+                        <span class="filter-count">@TotalActivos</span>
+                    </button>
+
+                    <button type="button"
+                            role="tab"
+                            aria-selected="@(FiltroEstado == "inactivos" ? "true" : "false")"
+                            class="filter-tab @(FiltroEstado == "inactivos" ? "is-active" : string.Empty)"
+                            @onclick='() => FiltroEstado = "inactivos"'>
+                        <span class="status-dot status-dot--inactive" aria-hidden="true"></span>
+                        <span>Inactivos</span>
+                        <span class="filter-count">@TotalInactivos</span>
+                    </button>
+                </div>
+
+                @if (TieneFiltrosActivos)
+                {
+                    <div class="filter-group-right">
+                        <button type="button"
+                                class="btn-clear-filters"
+                                @onclick="LimpiarFiltros"
+                                title="Restablecer filtros">
+                            <svg class="icon">
+                                <use href="#icon-x"></use>
+                            </svg>
+                            <span>Limpiar filtros</span>
+                        </button>
+                    </div>
+                }
+            </div>
+
+            <div class="table-wrap" aria-live="polite">
+                <table class="users-table roles-table">
+                    <thead>
+                        <tr>
+                            <th scope="col">Rol</th>
+                            <th scope="col">Descripción</th>
+                            <th scope="col" class="col-status">Estado</th>
+                            <th scope="col">Creación</th>
+                            <th scope="col" class="col-actions">Acciones</th>
+                        </tr>
+                    </thead>
+
+                    <tbody>
+                        @if (_cargando && _roles.Count == 0)
+                        {
+                            @for (var i = 0; i < 4; i++)
+                            {
+                                <tr class="skeleton-row" aria-hidden="true">
+                                    <td>
+                                        <div class="user-cell">
+                                            <span class="skeleton skeleton--avatar"></span>
+                                            <div class="skeleton-stack">
+                                                <span class="skeleton skeleton--line skeleton--line-lg"></span>
+                                                <span class="skeleton skeleton--line skeleton--line-sm"></span>
+                                            </div>
+                                        </div>
+                                    </td>
+                                    <td><span class="skeleton skeleton--line skeleton--line-lg"></span></td>
+                                    <td><span class="skeleton skeleton--badge"></span></td>
+                                    <td><span class="skeleton skeleton--line skeleton--line-sm"></span></td>
+                                    <td class="col-actions"><span class="skeleton skeleton--badge"></span></td>
+                                </tr>
+                            }
+                        }
+                        else if (_error is not null)
+                        {
+                            <tr>
+                                <td colspan="5">
+                                    <div class="table-state table-state--error" role="alert">
+                                        <div class="table-state__icon" aria-hidden="true">
+                                            <svg class="icon">
+                                                <use href="#icon-alert"></use>
+                                            </svg>
+                                        </div>
+                                        <strong>No se pudieron cargar los roles</strong>
+                                        <p>@_error</p>
+                                        <button type="button"
+                                                class="button button--secondary"
+                                                @onclick="CargarRolesAsync">
+                                            <svg class="icon">
+                                                <use href="#icon-refresh"></use>
+                                            </svg>
+                                            Reintentar
+                                        </button>
+                                    </div>
+                                </td>
+                            </tr>
+                        }
+                        else if (_roles.Count == 0)
+                        {
+                            <tr>
+                                <td colspan="5">
+                                    <div class="table-state">
+                                        <div class="table-state__icon" aria-hidden="true">
+                                            <svg class="icon">
+                                                <use href="#icon-shield"></use>
+                                            </svg>
+                                        </div>
+                                        <strong>Todavía no hay roles</strong>
+                                        <p>Utiliza el formulario de la izquierda para registrar el primer perfil.</p>
+                                    </div>
+                                </td>
+                            </tr>
+                        }
+                        else if (!RolesFiltrados.Any())
+                        {
+                            <tr>
+                                <td colspan="5">
+                                    <div class="table-state">
+                                        <div class="table-state__icon" aria-hidden="true">
+                                            <svg class="icon">
+                                                <use href="#icon-search"></use>
+                                            </svg>
+                                        </div>
+                                        <strong>Sin resultados</strong>
+                                        <p>No se encontraron roles con los filtros aplicados.</p>
+                                        <button type="button"
+                                                class="button button--secondary"
+                                                @onclick="LimpiarFiltros">
+                                            Restablecer filtros
+                                        </button>
+                                    </div>
+                                </td>
+                            </tr>
+                        }
+                        else
+                        {
+                            @foreach (var rol in RolesPagina)
+                            {
+                                var esEditando = _rolAEditar?.IdRol == rol.IdRol;
+
+                                <tr @key="rol.IdRol"
+                                    class="user-row @(esEditando ? "user-row--editing" : string.Empty)">
+
+                                    <td class="role-name-cell">
+                                        <div class="role-cell">
+                                            <div class="role-avatar" aria-hidden="true">
+                                                <svg class="icon">
+                                                    <use href="#icon-shield"></use>
+                                                </svg>
+                                            </div>
+
+                                            <div class="user-cell__copy">
+                                                <span class="user-name role-name">@rol.NombreRol</span>
+                                                <span class="user-cell__meta">
+                                                    ID #@rol.IdRol
+                                                    @if (esEditando)
+                                                    {
+                                                        <span class="editing-pill">Editando</span>
+                                                    }
+                                                </span>
+                                            </div>
+                                        </div>
+                                    </td>
+
+                                    <td class="role-description-cell">
+                                        <span class="user-name role-description">
+                                            @(string.IsNullOrWhiteSpace(rol.Descripcion)
+                                                ? "Sin descripción"
+                                                : rol.Descripcion)
+                                        </span>
+                                    </td>
+
+                                    <td class="col-status">
+                                        <span class="status-pill @(rol.Activo ? "status-pill--active" : "status-pill--inactive")">
+                                            <span aria-hidden="true"></span>
+                                            @(rol.Activo ? "Activo" : "Inactivo")
+                                        </span>
+                                    </td>
+
+                                    <td class="col-date">
+                                        @rol.FechaCreacion.ToString("dd/MM/yyyy")
+                                    </td>
+
+                                    <td class="col-actions">
+                                        <div class="action-buttons-group">
+                                            <button type="button"
+                                                    class="btn-action btn-action--edit @(esEditando ? "is-selected" : string.Empty)"
+                                                    title="@($"Editar rol {rol.NombreRol}")"
+                                                    aria-label="@($"Editar rol {rol.NombreRol}")"
+                                                    @onclick="() => SeleccionarParaEditar(rol)">
+                                                <svg class="icon" aria-hidden="true">
+                                                    <use href="#icon-edit"></use>
+                                                </svg>
+                                                <span>Editar</span>
+                                            </button>
+
+                                            @if (rol.Activo)
+                                            {
+                                                <button type="button"
+                                                        class="btn-action btn-action--danger"
+                                                        title="@($"Desactivar rol {rol.NombreRol}")"
+                                                        aria-label="@($"Desactivar rol {rol.NombreRol}")"
+                                                        @onclick="() => SolicitarDesactivacion(rol)">
+                                                    <svg class="icon" aria-hidden="true">
+                                                        <use href="#icon-trash"></use>
+                                                    </svg>
+                                                    <span>Desactivar</span>
+                                                </button>
+                                            }
+                                        </div>
+                                    </td>
+                                </tr>
+                            }
+                        }
+                    </tbody>
+                </table>
+            </div>
+
+            <DataPagination TotalRegistros="RolesFiltrados.Count()"
+                            PaginaActual="_paginacion.PaginaEfectiva(RolesFiltrados.Count())"
+                            TamanoPagina="_paginacion.Tamano"
+                            Singular="rol"
+                            Plural="roles"
+                            OnPaginaCambiada="IrAPagina"
+                            OnTamanoCambiado="CambiarTamanoPagina" />
+
+            <div class="table-footer">
+                <span>@Resumen</span>
+                <span class="table-footer__hint">
+                    Datos sincronizados con Oracle Database
+                    @if (_cargando && _roles.Count > 0)
+                    {
+                        <span> · Actualizando...</span>
+                    }
+                </span>
+            </div>
+        </section>
+    </div>
+
+    <ConfirmModal Visible="_confirmVisible"
+                  Titulo="¿Desactivar rol?"
+                  Mensaje="@_confirmMensaje"
+                  Detalle="El rol se conservará en la base de datos, pero quedará marcado como inactivo."
+                  BotonConfirmar="Desactivar rol"
+                  EsPeligro="true"
+                  Icono="#icon-trash"
+                  Cargando="_confirmCargando"
+                  OnConfirmar="ConfirmarDesactivacionAsync"
+                  OnCancelar="CerrarConfirmacion" />
+</div>
+
+@code {
+    private readonly List<RolDto> _roles = new();
+
+    private RolDto? _rolAEditar;
+    private RolFormulario _modelo = new();
+
+    private bool _cargando;
+    private bool _guardando;
+    private bool _disposed;
+
+    private string? _error;
+    private string _mensajeFeedback = string.Empty;
+    private bool _feedbackError;
+
+    private readonly Paginacion _paginacion = new();
+
+    private string _busqueda = string.Empty;
+    private string _filtroEstado = "todos";
+
+    private string Busqueda
+    {
+        get => _busqueda;
+        set
+        {
+            _busqueda = value;
+            _paginacion.Reiniciar();
+        }
+    }
+
+    private string FiltroEstado
+    {
+        get => _filtroEstado;
+        set
+        {
+            _filtroEstado = value;
+            _paginacion.Reiniciar();
+        }
+    }
+
+    private bool _confirmVisible;
+    private bool _confirmCargando;
+    private RolDto? _rolADesactivar;
+
+    private string _confirmMensaje =>
+        _rolADesactivar is null
+            ? "¿Está seguro de que desea desactivar este rol?"
+            : $"¿Está seguro de que desea desactivar el rol {_rolADesactivar.NombreRol}?";
+
+    private CancellationTokenSource? _cts;
+    private int _secuencia;
+
+    private bool EsModoEdicion => _rolAEditar is not null;
+
+    private int TotalGeneral => _roles.Count;
+    private int TotalActivos => _roles.Count(r => r.Activo);
+    private int TotalInactivos => _roles.Count(r => !r.Activo);
+
+    private bool TieneFiltrosActivos =>
+        !string.IsNullOrWhiteSpace(_busqueda)
+        || _filtroEstado != "todos";
+
+    private string ConteoVisible =>
+        _cargando && _roles.Count == 0 || _error is not null
+            ? "—"
+            : RolesFiltrados.Count().ToString();
+
+    private string ConteoTotal =>
+        _cargando && _roles.Count == 0 || _error is not null
+            ? "—"
+            : _roles.Count.ToString();
+
+    private string ConteoActivos =>
+        _cargando && _roles.Count == 0 || _error is not null
+            ? "—"
+            : TotalActivos.ToString();
+
+    private string ClaseFeedback =>
+        string.IsNullOrWhiteSpace(_mensajeFeedback)
+            ? string.Empty
+            : _feedbackError ? "is-error" : "is-success";
+
+    private IEnumerable<RolDto> RolesFiltrados =>
+        _roles.Where(rol =>
+            (_filtroEstado == "todos"
+                || (_filtroEstado == "activos" && rol.Activo)
+                || (_filtroEstado == "inactivos" && !rol.Activo))
+            &&
+            (string.IsNullOrWhiteSpace(_busqueda)
+                || rol.NombreRol.Contains(
+                    _busqueda.Trim(),
+                    StringComparison.OrdinalIgnoreCase)
+                || (rol.Descripcion?.Contains(
+                    _busqueda.Trim(),
+                    StringComparison.OrdinalIgnoreCase) ?? false)))
+        .OrderBy(rol => rol.NombreRol);
+
+    private List<RolDto> RolesPagina => _paginacion.Aplicar(RolesFiltrados).ToList();
+
+    private string Resumen
+    {
+        get
+        {
+            if (_cargando && _roles.Count == 0)
+                return "Cargando roles...";
+
+            if (_error is not null)
+                return "No se pudo cargar el listado";
+
+            var visibles = RolesFiltrados.Count();
+
+            if (_roles.Count == 0)
+                return "Sin roles registrados";
+
+            if (TieneFiltrosActivos)
+                return $"{visibles} de {_roles.Count} roles coinciden con los filtros";
+
+            return $"{_roles.Count} {(_roles.Count == 1 ? "rol registrado" : "roles registrados")}";
+        }
+    }
+
+    protected override async Task OnInitializedAsync()
+    {
+        await CargarRolesAsync();
+    }
+
+    public void Dispose()
+    {
+        _disposed = true;
+        _secuencia++;
+
+        _cts?.Cancel();
+        _cts?.Dispose();
+        _cts = null;
+
+        if (ApiStatus.Estado == EstadoApi.Cargando)
+        {
+            ApiStatus.Establecer(EstadoApi.Desconocido);
+        }
+    }
+
+    private async Task CargarRolesAsync()
+    {
+        if (_disposed)
+            return;
+
+        var secuencia = ++_secuencia;
+
+        _cts?.Cancel();
+        _cts?.Dispose();
+
+        _cts = new CancellationTokenSource();
+        var token = _cts.Token;
+
+        _cargando = true;
+        _error = null;
+        ApiStatus.Establecer(EstadoApi.Cargando);
+
+        try
+        {
+            var resultado = await Api.ListarAsync(token);
+
+            if (_disposed || secuencia != _secuencia)
+                return;
+
+            _roles.Clear();
+            _roles.AddRange(resultado);
+
+            ApiStatus.Establecer(EstadoApi.EnLinea);
+        }
+        catch (OperationCanceledException)
+        {
+            return;
+        }
+        catch (ApiException ex)
+        {
+            if (_disposed || secuencia != _secuencia)
+                return;
+
+            _roles.Clear();
+            _error = ex.Message;
+
+            ApiStatus.Establecer(
+                ex.Status == 0
+                    ? EstadoApi.SinConexion
+                    : EstadoApi.Error);
+
+            Toasts.Mostrar(
+                "Error al cargar los roles",
+                ex.Message,
+                ToastTipo.Error,
+                6500);
+        }
+        finally
+        {
+            if (!_disposed && secuencia == _secuencia)
+            {
+                _cargando = false;
+                StateHasChanged();
+            }
+        }
+    }
+
+    private string ClaseCampo(string propiedad) =>
+        _feedbackError
+        && propiedad == nameof(RolFormulario.NombreRol)
+            ? "field has-error"
+            : "field";
+
+    private void SeleccionarParaEditar(RolDto rol)
+    {
+        _rolAEditar = rol;
+
+        _modelo = new RolFormulario
+        {
+            NombreRol = rol.NombreRol,
+            Descripcion = rol.Descripcion,
+            Activo = rol.Activo
+        };
+
+        LimpiarFeedback();
+    }
+
+    private void CancelarEdicion()
+    {
+        if (_guardando)
+            return;
+
+        _rolAEditar = null;
+        _modelo = new RolFormulario();
+
+        LimpiarFeedback();
+    }
+
+    private void LimpiarFeedback()
+    {
+        _mensajeFeedback = string.Empty;
+        _feedbackError = false;
+    }
+
+    private void LimpiarBusqueda()
+    {
+        _busqueda = string.Empty;
+        _paginacion.Reiniciar();
+    }
+
+    private void LimpiarFiltros()
+    {
+        _busqueda = string.Empty;
+        _filtroEstado = "todos";
+        _paginacion.Reiniciar();
+    }
+
+    private void IrAPagina(int pagina) => _paginacion.IrA(pagina, RolesFiltrados.Count());
+
+    private void CambiarTamanoPagina(int tamano) => _paginacion.CambiarTamano(tamano);
+
+    private async Task GuardarAsync()
+    {
+        if (_guardando)
+            return;
+
+        LimpiarFeedback();
+
+        if (string.IsNullOrWhiteSpace(_modelo.NombreRol))
+        {
+            _mensajeFeedback = "El nombre del rol es obligatorio.";
+            _feedbackError = true;
+            return;
+        }
+
+        var nombreNormalizado = _modelo.NombreRol.Trim();
+
+        if (nombreNormalizado.Length > 50)
+        {
+            _mensajeFeedback = "El nombre no puede superar los 50 caracteres.";
+            _feedbackError = true;
+            return;
+        }
+
+        if ((_modelo.Descripcion?.Length ?? 0) > 250)
+        {
+            _mensajeFeedback = "La descripción no puede superar los 250 caracteres.";
+            _feedbackError = true;
+            return;
+        }
+
+        _guardando = true;
+
+        try
+        {
+            if (EsModoEdicion && _rolAEditar is not null)
+            {
+                var dto = new ActualizacionRolDto
+                {
+                    NombreRol = nombreNormalizado,
+                    Descripcion = NormalizarDescripcion(_modelo.Descripcion),
+                    Activo = _modelo.Activo
+                };
+
+                var nombre = dto.NombreRol;
+
+                await Api.ActualizarAsync(_rolAEditar.IdRol, dto);
+
+                Toasts.Mostrar(
+                    "Rol actualizado",
+                    $"El rol {nombre} fue actualizado correctamente.",
+                    ToastTipo.Exito);
+
+                _rolAEditar = null;
+                _modelo = new RolFormulario();
+            }
+            else
+            {
+                var dto = new CreacionRolDto
+                {
+                    NombreRol = nombreNormalizado,
+                    Descripcion = NormalizarDescripcion(_modelo.Descripcion),
+                    Activo = _modelo.Activo
+                };
+
+                var creado = await Api.CrearAsync(dto);
+
+                Toasts.Mostrar(
+                    "Rol registrado",
+                    $"El rol {creado.NombreRol} fue creado correctamente.",
+                    ToastTipo.Exito);
+
+                _modelo = new RolFormulario();
+            }
+
+            await CargarRolesAsync();
+        }
+        catch (ApiException ex)
+        {
+            _mensajeFeedback = ex.Message;
+            _feedbackError = true;
+
+            Toasts.Mostrar(
+                "No se pudo guardar el rol",
+                ex.Message,
+                ToastTipo.Error);
+        }
+        finally
+        {
+            _guardando = false;
+        }
+    }
+
+    private static string? NormalizarDescripcion(string? descripcion) =>
+        string.IsNullOrWhiteSpace(descripcion)
+            ? null
+            : descripcion.Trim();
+
+    private void SolicitarDesactivacion(RolDto rol)
+    {
+        _rolADesactivar = rol;
+        _confirmVisible = true;
+    }
+
+    private void CerrarConfirmacion()
+    {
+        if (_confirmCargando)
+            return;
+
+        _confirmVisible = false;
+        _rolADesactivar = null;
+    }
+
+    private async Task ConfirmarDesactivacionAsync()
+    {
+        if (_rolADesactivar is null || _confirmCargando)
+            return;
+
+        var rol = _rolADesactivar;
+        _confirmCargando = true;
+
+        try
+        {
+            await Api.DesactivarAsync(rol.IdRol);
+
+            Toasts.Mostrar(
+                "Rol desactivado",
+                $"El rol {rol.NombreRol} fue desactivado correctamente.",
+                ToastTipo.Info);
+
+            if (_rolAEditar?.IdRol == rol.IdRol)
+            {
+                _rolAEditar = null;
+                _modelo = new RolFormulario();
+                LimpiarFeedback();
+            }
+
+            _confirmVisible = false;
+            _rolADesactivar = null;
+
+            await CargarRolesAsync();
+        }
+        catch (ApiException ex)
+        {
+            Toasts.Mostrar(
+                "No se pudo desactivar el rol",
+                ex.Message,
+                ToastTipo.Error);
+        }
+        finally
+        {
+            _confirmCargando = false;
+        }
+    }
+
+    private sealed class RolFormulario : System.ComponentModel.DataAnnotations.IValidatableObject
+    {
+        [System.ComponentModel.DataAnnotations.Required(
+            ErrorMessage = "El nombre del rol es obligatorio.")]
+        [System.ComponentModel.DataAnnotations.StringLength(
+            50,
+            ErrorMessage = "El nombre no puede superar los 50 caracteres.")]
+        public string NombreRol { get; set; } = string.Empty;
+
+        [System.ComponentModel.DataAnnotations.StringLength(
+            250,
+            ErrorMessage = "La descripción no puede superar los 250 caracteres.")]
+        public string? Descripcion { get; set; }
+
+        public bool Activo { get; set; } = true;
+
+        public IEnumerable<System.ComponentModel.DataAnnotations.ValidationResult> Validate(
+            System.ComponentModel.DataAnnotations.ValidationContext validationContext)
+        {
+            if (string.IsNullOrWhiteSpace(NombreRol))
+            {
+                yield return new System.ComponentModel.DataAnnotations.ValidationResult(
+                    "El nombre del rol es obligatorio y no puede contener solo espacios.",
+                    new[] { nameof(NombreRol) });
+
+                yield break;
+            }
+
+            if (NombreRol.Trim().Length > 50)
+            {
+                yield return new System.ComponentModel.DataAnnotations.ValidationResult(
+                    "El nombre no puede superar los 50 caracteres después de quitar los espacios externos.",
+                    new[] { nameof(NombreRol) });
+            }
+
+            if ((Descripcion?.Length ?? 0) > 250)
+            {
+                yield return new System.ComponentModel.DataAnnotations.ValidationResult(
+                    "La descripción no puede superar los 250 caracteres.",
+                    new[] { nameof(Descripcion) });
+            }
+        }
+    }
+}

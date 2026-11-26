@@ -1,0 +1,396 @@
+@inherits LayoutComponentBase
+@implements IDisposable
+@inject NavigationManager Navigation
+@inject ApiStatusService ApiStatus
+@inject ToastService Toasts
+@inject SesionService Sesion
+
+<div class="app-shell @(_menuAbierto ? "sidebar-open" : string.Empty)">
+    <aside class="sidebar" id="sidebar" aria-label="Menú principal">
+        <div class="sidebar__brand">
+            <div class="brand-mark" aria-hidden="true">
+                <svg class="icon brand-mark__icon"><use href="#icon-tooth"></use></svg>
+            </div>
+            <div class="brand-copy">
+                <span class="brand-name">OdontoCare</span>
+                <span class="brand-subtitle">Clínica dental</span>
+            </div>
+            <button type="button" class="sidebar__close" aria-label="Cerrar menú" @onclick="CerrarMenu">
+                <svg class="icon"><use href="#icon-x"></use></svg>
+            </button>
+        </div>
+
+        <div class="sidebar__menu">
+            <div class="sidebar__section-label">Gestión</div>
+            <nav class="sidebar__nav">
+                @if (Sesion.TienePermiso(PermisoCodigos.InicioVer))
+                {
+                    <NavLink class="nav-item" href="inicio" ActiveClass="is-active">
+                        <svg class="icon nav-item__icon"><use href="#icon-home"></use></svg>
+                        <span>Inicio</span>
+                    </NavLink>
+                }
+                @if (Sesion.TienePermiso(PermisoCodigos.UsuariosVer))
+                {
+                    <NavLink class="nav-item" href="usuarios" ActiveClass="is-active">
+                        <svg class="icon nav-item__icon"><use href="#icon-users"></use></svg>
+                        <span>Usuarios</span>
+                        @if (EsUsuarios)
+                        {
+                            <span class="nav-item__active-dot" aria-hidden="true"></span>
+                        }
+                    </NavLink>
+                }
+                @if (Sesion.TienePermiso(PermisoCodigos.RolesVer))
+                {
+                    <NavLink class="nav-item" href="roles" ActiveClass="is-active">
+                        <svg class="icon nav-item__icon"><use href="#icon-shield"></use></svg>
+                        <span>Roles</span>
+                    </NavLink>
+                }
+                @if (Sesion.TienePermiso(PermisoCodigos.PermisosVer))
+                {
+                    <NavLink class="nav-item" href="permisos" ActiveClass="is-active">
+                        <svg class="icon nav-item__icon"><use href="#icon-key"></use></svg>
+                        <span>Permisos</span>
+                    </NavLink>
+                }
+                @if (Sesion.TienePermiso(PermisoCodigos.InventarioVer))
+                {
+                    <NavLink class="nav-item" href="inventario" ActiveClass="is-active">
+                        <svg class="icon nav-item__icon"><use href="#icon-clipboard-list"></use></svg>
+                        <span>Inventario</span>
+                    </NavLink>
+                }
+                @if (Sesion.TienePermiso(PermisoCodigos.CitasVer))
+                {
+                    <NavLink class="nav-item" href="citas" ActiveClass="is-active">
+                        <svg class="icon nav-item__icon"><use href="#icon-calendar"></use></svg>
+                        <span>Citas</span>
+                    </NavLink>
+                }
+                @if (Sesion.TienePermiso(PermisoCodigos.OdontologosVer))
+                {
+                    <NavLink class="nav-item" href="odontologos" ActiveClass="is-active">
+                        <svg class="icon nav-item__icon"><use href="#icon-users"></use></svg>
+                        <span>Odontólogos</span>
+                    </NavLink>
+                }
+                @if (Sesion.TienePermiso(PermisoCodigos.PromocionesVer))
+                {
+                    <NavLink class="nav-item" href="promociones" ActiveClass="is-active">
+                        <svg class="icon nav-item__icon"><use href="#icon-tag"></use></svg>
+                        <span>Promociones y Paquetes</span>
+                    </NavLink>
+                }
+                @if (Sesion.TienePermiso(PermisoCodigos.PagosVer))
+                {
+                    <NavLink class="nav-item" href="pagos" ActiveClass="is-active">
+                        <svg class="icon nav-item__icon"><use href="#icon-credit-card"></use></svg>
+                        <span>Pagos</span>
+                    </NavLink>
+                }
+                @if (Sesion.TienePermiso(PermisoCodigos.BitacorasVer))
+                {
+                    <NavLink class="nav-item" href="bitacoras" ActiveClass="is-active">
+                        <svg class="icon nav-item__icon"><use href="#icon-book"></use></svg>
+                        <span>Bitácoras</span>
+                    </NavLink>
+                }
+            </nav>
+
+            <div class="sidebar__section-label sidebar__section-label--second">Clínica</div>
+            <nav class="sidebar__nav">
+                @if (Sesion.TienePermiso(PermisoCodigos.PacientesVer))
+                {
+                    <NavLink class="nav-item" href="pacientes" ActiveClass="is-active">
+                        <svg class="icon nav-item__icon"><use href="#icon-user"></use></svg>
+                        <span>Pacientes</span>
+                    </NavLink>
+                }
+                @if (Sesion.TienePermiso(PermisoCodigos.TratamientosVer))
+                {
+                    <NavLink class="nav-item" href="tratamientos" ActiveClass="is-active">
+                        <svg class="icon nav-item__icon"><use href="#icon-tooth"></use></svg>
+                        <span>Tratamientos</span>
+                    </NavLink>
+                }
+                @if (Sesion.TienePermiso(PermisoCodigos.PacientesExpediente))
+                {
+                    <NavLink class="nav-item" href="expedientes" ActiveClass="is-active">
+                        <svg class="icon nav-item__icon"><use href="#icon-folder"></use></svg>
+                        <span>Expedientes</span>
+                    </NavLink>
+                }
+                <NavLink class="nav-item" href="radiografias" ActiveClass="is-active">
+                    <svg class="icon nav-item__icon"><use href="#icon-scan"></use></svg>
+                    <span>Radiografías y Exámenes</span>
+                </NavLink>
+                @if (Sesion.TienePermiso(PermisoCodigos.ReportesVer))
+                {
+                    <NavLink class="nav-item" href="reportes" ActiveClass="is-active">
+                        <svg class="icon nav-item__icon"><use href="#icon-chart"></use></svg>
+                        <span>Reportes</span>
+                    </NavLink>
+                }
+            </nav>
+        </div>
+
+        <div class="sidebar__profile">
+            <div class="avatar @ClaseAvatarPerfil" title="@NombrePerfil">@InicialesPerfil</div>
+            <div class="profile-copy">
+                <strong title="@NombrePerfil">@NombrePerfil</strong>
+                <span>@RolPerfil</span>
+            </div>
+            <span class="presence-dot" title="En línea"></span>
+        </div>
+
+        <button type="button" class="logout-button" @onclick="CerrarSesion">
+            <svg class="icon"><use href="#icon-logout"></use></svg>
+            <span>Cerrar sesión</span>
+        </button>
+
+        <div class="sidebar__weather" role="status" aria-label="Clima actual: 23 grados, parcialmente soleado">
+            <svg class="icon sidebar__weather-icon" aria-hidden="true"><use href="#icon-sun-cloud"></use></svg>
+            <div class="sidebar__weather-copy">
+                <strong>23°C</strong>
+                <span>Parc. soleado</span>
+            </div>
+        </div>
+    </aside>
+
+    <div class="sidebar-backdrop" aria-hidden="true" @onclick="CerrarMenu"></div>
+
+    <main class="main">
+        <header class="topbar">
+            <button type="button"
+                    class="icon-button menu-toggle"
+                    aria-label="Abrir menú"
+                    aria-controls="sidebar"
+                    aria-expanded="@(_menuAbierto ? "true" : "false")"
+                    @onclick="AlternarMenu">
+                <svg class="icon"><use href="#icon-menu"></use></svg>
+            </button>
+
+            <div class="breadcrumb">
+                <svg class="icon breadcrumb__chevron"><use href="#icon-chevron-right"></use></svg>
+                <strong>@_seccionActual</strong>
+            </div>
+
+            <div class="topbar__actions">
+                <ThemeToggle ClaseAdicional="theme-toggle--topbar" />
+
+                <div class="topbar__status @ApiStatus.ClaseCss">
+                    <span class="status-dot"></span>
+                    <span class="status-text">@ApiStatus.Texto</span>
+                </div>
+            </div>
+        </header>
+
+        @Body
+    </main>
+</div>
+
+<ToastContainer />
+
+@code {
+    private bool _menuAbierto;
+    private string _seccionActual = "Usuarios";
+    private CancellationTokenSource? _cierreProgramado;
+    private bool _cerrandoPorExpiracion;
+
+    private bool EsUsuarios => _seccionActual == "Usuarios";
+
+    private string NombrePerfil => Sesion.Usuario?.NombreCompleto ?? "Sesión no iniciada";
+
+    private string RolPerfil => Sesion.Usuario?.RolLegible ?? "Sin rol asignado";
+
+    private string InicialesPerfil => Sesion.Usuario?.Iniciales ?? "US";
+
+    private string ClaseAvatarPerfil
+    {
+        get
+        {
+            var rol = Sesion.Usuario?.Rol.Trim().ToLowerInvariant();
+
+            return rol is "administrador" or "administrador del sistema"
+                ? "avatar--admin"
+                : string.Empty;
+        }
+    }
+
+    protected override async Task OnInitializedAsync()
+    {
+        ActualizarSeccion();
+        Navigation.LocationChanged += AlCambiarUbicacion;
+        ApiStatus.OnChange += AlCambiarEstadoApi;
+        Sesion.OnChange += AlCambiarSesion;
+
+        await Sesion.InicializarAsync();
+        ProgramarCierrePorExpiracion();
+    }
+
+    public void Dispose()
+    {
+        Navigation.LocationChanged -= AlCambiarUbicacion;
+        ApiStatus.OnChange -= AlCambiarEstadoApi;
+        Sesion.OnChange -= AlCambiarSesion;
+
+        CancelarCierreProgramado();
+    }
+
+    private void AlCambiarUbicacion(object? sender, LocationChangedEventArgs args)
+    {
+        _menuAbierto = false;
+        ActualizarSeccion();
+        _ = InvokeAsync(StateHasChanged);
+    }
+
+    private void AlCambiarEstadoApi()
+    {
+        _ = InvokeAsync(StateHasChanged);
+    }
+
+    private void AlCambiarSesion()
+    {
+        _ = InvokeAsync(() =>
+        {
+            ProgramarCierrePorExpiracion();
+            StateHasChanged();
+        });
+    }
+
+    private void ActualizarSeccion()
+    {
+        var ruta = new Uri(Navigation.Uri).AbsolutePath.TrimEnd('/').ToLowerInvariant();
+
+        _seccionActual = ruta switch
+        {
+            "" or "/inicio" => "Inicio",
+            "/usuarios" => "Usuarios",
+            "/roles" => "Roles",
+            "/permisos" => "Permisos",
+            "/inventario" => "Inventario",
+            "/citas" => "Citas",
+            "/odontologos" => "Odontólogos",
+            "/promociones" => "Promociones y Paquetes",
+            "/pagos" => "Pagos",
+            "/bitacoras" => "Bitácoras",
+            "/pacientes" => "Pacientes",
+            "/tratamientos" => "Tratamientos",
+            "/expedientes" => "Expedientes",
+            "/radiografias" => "Radiografías y Exámenes",
+            "/reportes" => "Reportes",
+            _ => "Página no encontrada"
+        };
+    }
+
+    private void AlternarMenu()
+    {
+        _menuAbierto = !_menuAbierto;
+    }
+
+    private void CerrarMenu()
+    {
+        _menuAbierto = false;
+    }
+
+    private async Task CerrarSesion()
+    {
+        _menuAbierto = false;
+
+        await Sesion.CerrarSesionAsync();
+
+        Toasts.Mostrar(
+            "Sesión finalizada",
+            "Cerraste sesión correctamente. Tus datos de acceso ya no están activos.",
+            ToastTipo.Info,
+            4500);
+
+        Navigation.NavigateTo("login?motivo=sesion-cerrada", replace: true);
+    }
+
+    private void ProgramarCierrePorExpiracion()
+    {
+        CancelarCierreProgramado();
+
+        if (_cerrandoPorExpiracion || Sesion.Usuario is not { } usuario)
+        {
+            return;
+        }
+
+        var restante = usuario.ExpiraEn - DateTime.UtcNow;
+
+        if (restante <= TimeSpan.Zero)
+        {
+            _ = CerrarPorExpiracionAsync();
+            return;
+        }
+
+        _cierreProgramado = new CancellationTokenSource();
+        _ = EsperarExpiracionAsync(usuario, restante, _cierreProgramado.Token);
+    }
+
+    private async Task EsperarExpiracionAsync(
+        SesionUsuario usuario,
+        TimeSpan restante,
+        CancellationToken cancellationToken)
+    {
+        try
+        {
+            await Task.Delay(restante, cancellationToken);
+        }
+        catch (OperationCanceledException)
+        {
+            return;
+        }
+
+        if (cancellationToken.IsCancellationRequested)
+        {
+            return;
+        }
+
+        await InvokeAsync(async () =>
+        {
+            // Si la sesión cambió mientras esperábamos, no se cierra la nueva.
+            if (!ReferenceEquals(Sesion.Usuario, usuario))
+            {
+                return;
+            }
+
+            await CerrarPorExpiracionAsync();
+        });
+    }
+
+    private async Task CerrarPorExpiracionAsync()
+    {
+        if (_cerrandoPorExpiracion)
+        {
+            return;
+        }
+
+        _cerrandoPorExpiracion = true;
+
+        await Sesion.CerrarSesionAsync();
+
+        Toasts.Mostrar(
+            "Sesión finalizada",
+            "Tu sesión expiró por seguridad. Ingresa nuevamente para continuar.",
+            ToastTipo.Info,
+            6000);
+
+        Navigation.NavigateTo("login?motivo=expirada", replace: true);
+    }
+
+    private void CancelarCierreProgramado()
+    {
+        if (_cierreProgramado is null)
+        {
+            return;
+        }
+
+        _cierreProgramado.Cancel();
+        _cierreProgramado.Dispose();
+        _cierreProgramado = null;
+    }
+}

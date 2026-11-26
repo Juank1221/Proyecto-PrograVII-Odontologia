@@ -1,0 +1,45 @@
+@if (Visible)
+{
+    <div class="drawer-backdrop" aria-hidden="true" @onclick="CerrarAsync"></div>
+    <aside class="drawer" role="dialog" aria-modal="true" aria-labelledby="drawer-titulo">
+        <header class="drawer__header">
+            <div class="drawer__titulo">
+                <span class="drawer__icono" aria-hidden="true">
+                    <svg class="icon"><use href="#icon-plus"></use></svg>
+                </span>
+                <div>
+                    <h2 id="drawer-titulo">@Titulo</h2>
+                    @if (!string.IsNullOrWhiteSpace(Subtitulo))
+                    {
+                        <p>@Subtitulo</p>
+                    }
+                </div>
+            </div>
+            <button type="button" class="drawer__cerrar" aria-label="Cerrar panel" @onclick="CerrarAsync">
+                <svg class="icon" aria-hidden="true"><use href="#icon-x"></use></svg>
+            </button>
+        </header>
+        <div class="drawer__cuerpo usuarios-card">
+            @ChildContent
+        </div>
+    </aside>
+}
+
+@code {
+    [Parameter]
+    public bool Visible { get; set; }
+
+    [Parameter, EditorRequired]
+    public string Titulo { get; set; } = string.Empty;
+
+    [Parameter]
+    public string? Subtitulo { get; set; }
+
+    [Parameter]
+    public RenderFragment? ChildContent { get; set; }
+
+    [Parameter]
+    public EventCallback OnCerrar { get; set; }
+
+    private Task CerrarAsync() => OnCerrar.InvokeAsync();
+}

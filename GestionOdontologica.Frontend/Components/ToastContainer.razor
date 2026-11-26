@@ -1,0 +1,48 @@
+@implements IDisposable
+@inject ToastService ToastService
+
+<div class="toast-container" aria-live="polite" aria-atomic="false">
+    @foreach (var toast in ToastService.Toasts)
+    {
+        <div @key="toast.Id"
+             class="toast @toast.ClaseCss @(toast.Saliendo ? "is-leaving" : string.Empty)"
+             role="@(toast.Tipo == ToastTipo.Error ? "alert" : "status")"
+             style="--toast-duration: @(toast.DuracionMs)ms">
+            <div class="toast__icon" aria-hidden="true">
+                <svg class="icon"><use href="@Icono(toast.Tipo)"></use></svg>
+            </div>
+            <div class="toast__body">
+                <strong class="toast__title">@toast.Titulo</strong>
+                <p class="toast__message">@toast.Mensaje</p>
+            </div>
+            <button type="button" class="toast__close" aria-label="Cerrar notificación" @onclick="() => ToastService.Cerrar(toast)">
+                <svg class="icon"><use href="#icon-x"></use></svg>
+            </button>
+            <span class="toast__progress" aria-hidden="true"></span>
+        </div>
+    }
+</div>
+
+@code {
+    protected override void OnInitialized()
+    {
+        ToastService.OnChange += AlCambiar;
+    }
+
+    public void Dispose()
+    {
+        ToastService.OnChange -= AlCambiar;
+    }
+
+    private void AlCambiar()
+    {
+        _ = InvokeAsync(StateHasChanged);
+    }
+
+    private static string Icono(ToastTipo tipo) => tipo switch
+    {
+        ToastTipo.Exito => "#icon-check",
+        ToastTipo.Error => "#icon-alert",
+        _ => "#icon-info"
+    };
+}

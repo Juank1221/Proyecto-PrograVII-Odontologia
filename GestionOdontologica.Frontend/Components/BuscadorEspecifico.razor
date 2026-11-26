@@ -1,0 +1,58 @@
+@using GestionOdontologica.Frontend.Models
+
+<div class="buscador-especifico" role="search">
+    <label class="buscador-especifico__campo">
+        <span class="visually-hidden">Buscar por</span>
+        <select class="buscador-especifico__select" @onchange="AlCambiarCampo">
+            @foreach (var campo in Campos)
+            {
+                <option value="@campo.Clave" selected="@(campo.Clave == ClaveActual)">@campo.Etiqueta</option>
+            }
+        </select>
+    </label>
+
+    <label class="buscador-especifico__texto">
+        <svg class="icon search-icon" aria-hidden="true"><use href="#icon-search"></use></svg>
+        <input type="search"
+               autocomplete="off"
+               aria-label="@(CampoActual?.Etiqueta ?? "Buscar")"
+               placeholder="@(CampoActual?.Placeholder ?? "Buscar...")"
+               value="@Texto"
+               @oninput="AlEscribir" />
+        @if (!string.IsNullOrEmpty(Texto))
+        {
+            <button type="button" class="btn-clear-search" aria-label="Limpiar búsqueda" @onclick="LimpiarTexto">
+                <svg class="icon" aria-hidden="true"><use href="#icon-x"></use></svg>
+            </button>
+        }
+    </label>
+</div>
+
+@code {
+    [Parameter, EditorRequired]
+    public IReadOnlyList<CampoBusqueda> Campos { get; set; } = Array.Empty<CampoBusqueda>();
+
+    [Parameter]
+    public string Campo { get; set; } = string.Empty;
+
+    [Parameter]
+    public EventCallback<string> CampoChanged { get; set; }
+
+    [Parameter]
+    public string Texto { get; set; } = string.Empty;
+
+    [Parameter]
+    public EventCallback<string> TextoChanged { get; set; }
+
+    private string ClaveActual => CampoActual?.Clave ?? string.Empty;
+
+    private CampoBusqueda? CampoActual => Campos.FirstOrDefault(c => c.Clave == Campo) ?? Campos.FirstOrDefault();
+
+    private Task AlCambiarCampo(ChangeEventArgs evento) =>
+        CampoChanged.InvokeAsync(evento.Value?.ToString() ?? string.Empty);
+
+    private Task AlEscribir(ChangeEventArgs evento) =>
+        TextoChanged.InvokeAsync(evento.Value?.ToString() ?? string.Empty);
+
+    private Task LimpiarTexto() => TextoChanged.InvokeAsync(string.Empty);
+}

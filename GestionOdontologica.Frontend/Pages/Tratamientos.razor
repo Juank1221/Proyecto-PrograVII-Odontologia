@@ -1,0 +1,682 @@
+@page "/tratamientos"
+@attribute [Microsoft.AspNetCore.Authorization.Authorize]
+@using System.ComponentModel.DataAnnotations
+@using GestionOdontologica.Frontend.Models
+@using GestionOdontologica.Frontend.Services
+@inject TratamientosApiService TratamientosApi
+@inject ToastService ToastService
+
+<PageTitle>Tratamientos</PageTitle>
+
+<div class="usuarios-page">
+    <header class="usuarios-page__header">
+        <div>
+            <h1>Tratamientos</h1>
+            <p>Catálogo de tratamientos dentales y sus costos.</p>
+        </div>
+
+        <div class="usuarios-card__header-actions">
+            <AuthorizeView Policy="@PermisoCodigos.TratamientosCrear">
+                <button class="btn btn--primary" type="button"
+                        @onclick="NuevoTratamiento">
+                    Nuevo tratamiento
+                </button>
+            </AuthorizeView>
+        </div>
+    </header>
+
+    <div class="antecedente-stats">
+        <div class="antecedente-stat">
+            <span>Total de tratamientos</span>
+            <strong>@ListaTratamientos.Count</strong>
+        </div>
+        <div class="antecedente-stat antecedente-stat--medico">
+            <span>Activos</span>
+            <strong>@ListaTratamientos.Count(t => t.Activo)</strong>
+        </div>
+        <div class="antecedente-stat antecedente-stat--alergico">
+            <span>Inactivos</span>
+            <strong>@ListaTratamientos.Count(t => !t.Activo)</strong>
+        </div>
+    </div>
+
+    @if (MostrarFormulario)
+    {
+        <section class="usuarios-card usuarios-card--form">
+            <header class="usuarios-card__header">
+                <div>
+                    <h2>@(Editando ? "Editar tratamiento" : "Nuevo tratamiento")</h2>
+                    <p>
+                        @(Editando
+                            ? "Actualiza la información del tratamiento."
+                            : "Completa los datos para registrar un nuevo tratamiento.")
+                    </p>
+                </div>
+            </header>
+
+            <AuthorizeView Policy="@(Editando
+                           ? PermisoCodigos.TratamientosEditar
+                           : PermisoCodigos.TratamientosCrear)">
+
+                <Authorized Context="autorizacion">
+                    <EditForm Model="Formulario" OnValidSubmit="GuardarAsync">
+                        <DataAnnotationsValidator />
+
+                        <div class="form-section">
+                            <div class="form-section__header">
+                                <h3>Información del tratamiento</h3>
+                                <p>Datos generales y precio del servicio odontológico.</p>
+                            </div>
+
+                            <div class="form-grid">
+                                <div class="form-field">
+                                    <label>Código del tratamiento *</label>
+                                    <InputText class="form-control"
+                                               @bind-Value="Formulario.CodigoTratamiento"
+                                               placeholder="Ej. TR-001" />
+                                    <ValidationMessage For="@(() => Formulario.CodigoTratamiento)" />
+                                </div>
+
+                                <div class="form-field">
+                                    <label>Nombre *</label>
+                                    <InputText class="form-control"
+                                               @bind-Value="Formulario.Nombre"
+                                               placeholder="Nombre del tratamiento" />
+                                    <ValidationMessage For="@(() => Formulario.Nombre)" />
+                                </div>
+
+                                <div class="form-field">
+                                    <label>Precio *</label>
+                                    <InputNumber class="form-control"
+                                                 @bind-Value="Formulario.Precio"
+                                                 step="0.01"
+                                                 min="0" />
+                                    <ValidationMessage For="@(() => Formulario.Precio)" />
+                                </div>
+
+                                <div class="form-field form-field--span-4">
+                                    <label>Descripción</label>
+                                    <InputTextArea class="form-control"
+                                                   @bind-Value="Formulario.Descripcion"
+                                                   rows="3"
+                                                   placeholder="Descripción del tratamiento..." />
+                                    <ValidationMessage For="@(() => Formulario.Descripcion)" />
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="form-actions">
+                            <button class="btn btn--primary"
+                                    type="submit"
+                                    disabled="@Guardando">
+                                @(Guardando
+                                    ? "Guardando..."
+                                    : Editando
+                                        ? "Guardar cambios"
+                                        : "Registrar tratamiento")
+                            </button>
+
+                            <button class="btn btn--ghost"
+                                    type="button"
+                                    @onclick="CancelarEdicion"
+                                    disabled="@Guardando">
+                                Cancelar
+                            </button>
+                        </div>
+                    </EditForm>
+                </Authorized>
+            </AuthorizeView>
+        </section>
+    }
+
+    <section class="usuarios-card usuarios-card--list">
+        <header class="usuarios-card__header">
+            <div>
+                <h2>Listado de tratamientos</h2>
+                <p>@TotalFiltrados tratamiento(s) encontrados</p>
+            </div>
+
+            <div class="usuarios-card__header-actions">
+                <input class="form-control usuarios-search"
+                       placeholder="Buscar por código, nombre o descripción..."
+                       @bind="Filtro"
+                       @bind:event="oninput" />
+
+                <select class="form-control"
+                        @bind="FiltroEstado"
+                        @bind:after="ReiniciarPaginacion">
+                    <option value="Todos">Todos los estados</option>
+                    <option value="Activos">Activos</option>
+                    <option value="Inactivos">Inactivos</option>
+                </select>
+            </div>
+        </header>
+
+        @if (Cargando)
+        {
+            <p>Cargando tratamientos...</p>
+        }
+        else if (!TratamientosFiltrados.Any())
+        {
+            <div class="empty-state empty-state--compact">
+                <strong>No hay tratamientos para mostrar</strong>
+                <span>Prueba con otro criterio de búsqueda o registra un tratamiento.</span>
+            </div>
+        }
+        else
+        {
+            <div class="table-wrapper">
+                <table class="usuarios-table">
+                    <thead>
+                        <tr>
+                            <th>Código</th>
+                            <th>Tratamiento</th>
+                            <th>Precio</th>
+                            <th>Estado</th>
+                            <th>Fecha de creación</th>
+                            <th class="usuarios-table__actions">Acciones</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var tratamiento in TratamientosPagina)
+                        {
+                            <tr>
+                                <td>
+                                    <strong>@tratamiento.CodigoTratamiento</strong>
+                                </td>
+                                <td>
+                                    <div class="usuarios-table__name">
+                                        @tratamiento.Nombre
+                                    </div>
+                                    <div class="usuarios-table__meta">
+                                        @(string.IsNullOrWhiteSpace(tratamiento.Descripcion)
+                                            ? "Sin descripción"
+                                            : tratamiento.Descripcion)
+                                    </div>
+                                </td>
+                                <td>
+                                    @tratamiento.Precio.ToString("C2", Cultura)
+                                </td>
+                                <td>
+                                    <span class="badge @(tratamiento.Activo
+                                          ? "badge--success"
+                                          : "badge--danger")">
+                                        @(tratamiento.Activo ? "Activo" : "Inactivo")
+                                    </span>
+                                </td>
+                                <td>
+                                    @tratamiento.FechaCreacion.ToString("dd/MM/yyyy")
+                                </td>
+                                <td class="usuarios-table__actions">
+                                    @if (tratamiento.Activo)
+                                    {
+                                        <AuthorizeView Policy="@PermisoCodigos.TratamientosEditar">
+                                            <button class="btn btn--ghost btn--sm"
+                                                    type="button"
+                                                    @onclick="() => Editar(tratamiento)">
+                                                Editar
+                                            </button>
+                                        </AuthorizeView>
+
+                                        <AuthorizeView Policy="@PermisoCodigos.TratamientosDesactivar">
+                                            <button class="btn btn--ghost btn--sm"
+                                                    type="button"
+                                                    @onclick="() => SolicitarDesactivacion(tratamiento)">
+                                                Desactivar
+                                            </button>
+                                        </AuthorizeView>
+                                    }
+                                    else
+                                    {
+                                        <AuthorizeView Policy="@PermisoCodigos.TratamientosEditar">
+                                            <button class="btn btn--ghost btn--sm"
+                                                    type="button"
+                                                    @onclick="() => SolicitarActivacion(tratamiento)">
+                                                Reactivar
+                                            </button>
+                                        </AuthorizeView>
+                                    }
+                                </td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+
+            <DataPagination TotalRegistros="TotalFiltrados"
+                            PaginaActual="_paginacion.PaginaEfectiva(TotalFiltrados)"
+                            TamanoPagina="_paginacion.Tamano"
+                            Singular="tratamiento"
+                            Plural="tratamientos"
+                            OnPaginaCambiada="IrAPagina"
+                            OnTamanoCambiado="CambiarTamanoPagina" />
+        }
+    </section>
+</div>
+
+@if (MostrarConfirmacion && TratamientoPendienteDesactivar != null)
+{
+    <div class="modal-backdrop">
+        <div class="modal-dialog">
+            <header class="modal-header">
+                <div class="modal-header__title">
+                    <h2>Desactivar tratamiento</h2>
+                    <p>Confirmación de la operación</p>
+                </div>
+                <button class="modal-close"
+                        type="button"
+                        @onclick="CerrarConfirmacion"
+                        disabled="@Desactivando">
+                    ×
+                </button>
+            </header>
+
+            <div class="modal-body">
+                <p>
+                    ¿Estás seguro de que deseas desactivar el tratamiento
+                    <strong>@TratamientoPendienteDesactivar.Nombre</strong>?
+                </p>
+                <p>
+                    El tratamiento dejará de estar activo, pero su información
+                    permanecerá registrada en el sistema.
+                </p>
+            </div>
+
+            <footer class="modal-footer">
+                <button class="btn btn--ghost"
+                        type="button"
+                        @onclick="CerrarConfirmacion"
+                        disabled="@Desactivando">
+                    Cancelar
+                </button>
+
+                <button class="btn btn--primary"
+                        type="button"
+                        @onclick="ConfirmarDesactivacionAsync"
+                        disabled="@Desactivando">
+                    @(Desactivando ? "Desactivando..." : "Confirmar desactivación")
+                </button>
+            </footer>
+        </div>
+    </div>
+}
+
+@if (MostrarConfirmacionActivacion && TratamientoPendienteActivar != null)
+{
+    <div class="modal-backdrop">
+        <div class="modal-dialog">
+            <header class="modal-header">
+                <div class="modal-header__title">
+                    <h2>Reactivar tratamiento</h2>
+                    <p>Confirmación de la operación</p>
+                </div>
+                <button class="modal-close"
+                        type="button"
+                        @onclick="CerrarConfirmacionActivacion"
+                        disabled="@Activando">
+                    ×
+                </button>
+            </header>
+
+            <div class="modal-body">
+                <p>
+                    ¿Estás seguro de que deseas reactivar el tratamiento
+                    <strong>@TratamientoPendienteActivar.Nombre</strong>?
+                </p>
+                <p>
+                    El tratamiento volverá a estar activo y disponible en el catálogo.
+                </p>
+            </div>
+
+            <footer class="modal-footer">
+                <button class="btn btn--ghost"
+                        type="button"
+                        @onclick="CerrarConfirmacionActivacion"
+                        disabled="@Activando">
+                    Cancelar
+                </button>
+
+                <button class="btn btn--primary"
+                        type="button"
+                        @onclick="ConfirmarActivacionAsync"
+                        disabled="@Activando">
+                    @(Activando ? "Reactivando..." : "Confirmar reactivación")
+                </button>
+            </footer>
+        </div>
+    </div>
+}
+
+@code {
+    private static readonly System.Globalization.CultureInfo Cultura =
+        System.Globalization.CultureInfo.GetCultureInfo("es-CR");
+
+    private List<TratamientoDto> ListaTratamientos = new();
+
+    private bool Cargando = true;
+    private bool Guardando;
+    private bool Editando;
+    private bool MostrarFormulario;
+    private bool MostrarConfirmacion;
+    private bool Desactivando;
+    private bool MostrarConfirmacionActivacion;
+    private bool Activando;
+
+    private int? IdTratamientoEditando;
+
+    private TratamientoForm Formulario = new();
+
+    private TratamientoDto? TratamientoPendienteDesactivar;
+    private TratamientoDto? TratamientoPendienteActivar;
+
+    private readonly Paginacion _paginacion = new();
+
+    private string _filtro = string.Empty;
+    private string FiltroEstado = "Todos";
+
+    private string Filtro
+    {
+        get => _filtro;
+        set
+        {
+            _filtro = value;
+            _paginacion.Reiniciar();
+        }
+    }
+
+    private IEnumerable<TratamientoDto> TratamientosFiltrados =>
+        ListaTratamientos.Where(t =>
+        {
+            var coincideTexto = string.IsNullOrWhiteSpace(Filtro)
+                || $"{t.CodigoTratamiento} {t.Nombre} {t.Descripcion}"
+                    .Contains(Filtro, StringComparison.OrdinalIgnoreCase);
+
+            var coincideEstado = FiltroEstado switch
+            {
+                "Activos" => t.Activo,
+                "Inactivos" => !t.Activo,
+                _ => true
+            };
+
+            return coincideTexto && coincideEstado;
+        });
+
+    private List<TratamientoDto> TratamientosPagina =>
+        _paginacion.Aplicar(TratamientosFiltrados).ToList();
+
+    private int TotalFiltrados => TratamientosFiltrados.Count();
+
+    protected override async Task OnInitializedAsync()
+    {
+        await CargarAsync();
+    }
+
+    private async Task CargarAsync()
+    {
+        try
+        {
+            Cargando = true;
+
+            ListaTratamientos = (await TratamientosApi.ObtenerTodosAsync())
+                .ToList();
+        }
+        catch (Exception ex)
+        {
+            ToastService.Mostrar(
+                "Error",
+                $"Error al cargar tratamientos: {ex.Message}",
+                ToastTipo.Error);
+        }
+        finally
+        {
+            Cargando = false;
+        }
+    }
+
+    private void NuevoTratamiento()
+    {
+        Editando = false;
+        IdTratamientoEditando = null;
+        Formulario = new TratamientoForm();
+        MostrarFormulario = true;
+    }
+
+    private void Editar(TratamientoDto tratamiento)
+    {
+        Editando = true;
+        IdTratamientoEditando = tratamiento.IdTratamiento;
+
+        Formulario = new TratamientoForm
+        {
+            CodigoTratamiento = tratamiento.CodigoTratamiento,
+            Nombre = tratamiento.Nombre,
+            Descripcion = tratamiento.Descripcion,
+            Precio = tratamiento.Precio
+        };
+
+        MostrarFormulario = true;
+    }
+
+    private async Task GuardarAsync()
+    {
+        try
+        {
+            Guardando = true;
+
+            if (Editando && IdTratamientoEditando.HasValue)
+            {
+                var request = new ActualizarTratamientoRequest
+                {
+                    CodigoTratamiento = Formulario.CodigoTratamiento.Trim(),
+                    Nombre = Formulario.Nombre.Trim(),
+                    Descripcion = Formulario.Descripcion?.Trim(),
+                    Precio = Formulario.Precio
+                };
+
+                using var response = await TratamientosApi.ActualizarAsync(
+                    IdTratamientoEditando.Value,
+                    request);
+
+                if (!response.IsSuccessStatusCode)
+                {
+                    throw new Exception(await ObtenerErrorAsync(response));
+                }
+
+                ToastService.Mostrar(
+                    "Éxito",
+                    "Tratamiento actualizado correctamente.",
+                    ToastTipo.Exito);
+            }
+            else
+            {
+                var request = new CrearTratamientoRequest
+                {
+                    CodigoTratamiento = Formulario.CodigoTratamiento.Trim(),
+                    Nombre = Formulario.Nombre.Trim(),
+                    Descripcion = Formulario.Descripcion?.Trim(),
+                    Precio = Formulario.Precio
+                };
+
+                using var response = await TratamientosApi.RegistrarAsync(request);
+
+                if (!response.IsSuccessStatusCode)
+                {
+                    throw new Exception(await ObtenerErrorAsync(response));
+                }
+
+                ToastService.Mostrar(
+                    "Éxito",
+                    "Tratamiento registrado correctamente.",
+                    ToastTipo.Exito);
+            }
+
+            CancelarEdicion();
+            await CargarAsync();
+        }
+        catch (Exception ex)
+        {
+            ToastService.Mostrar(
+                "Error",
+                ex.Message,
+                ToastTipo.Error);
+        }
+        finally
+        {
+            Guardando = false;
+        }
+    }
+
+    private void CancelarEdicion()
+    {
+        Editando = false;
+        IdTratamientoEditando = null;
+        MostrarFormulario = false;
+        Formulario = new TratamientoForm();
+    }
+
+    private void SolicitarDesactivacion(TratamientoDto tratamiento)
+    {
+        TratamientoPendienteDesactivar = tratamiento;
+        MostrarConfirmacion = true;
+    }
+
+    private async Task ConfirmarDesactivacionAsync()
+    {
+        if (TratamientoPendienteDesactivar == null)
+            return;
+
+        try
+        {
+            Desactivando = true;
+
+            using var response = await TratamientosApi.DesactivarAsync(
+                TratamientoPendienteDesactivar.IdTratamiento);
+
+            if (!response.IsSuccessStatusCode)
+            {
+                throw new Exception(await ObtenerErrorAsync(response));
+            }
+
+            ToastService.Mostrar(
+                "Éxito",
+                "Tratamiento desactivado correctamente.",
+                ToastTipo.Exito);
+
+            CerrarConfirmacion();
+            await CargarAsync();
+        }
+        catch (Exception ex)
+        {
+            ToastService.Mostrar(
+                "Error",
+                ex.Message,
+                ToastTipo.Error);
+        }
+        finally
+        {
+            Desactivando = false;
+        }
+    }
+
+    private void CerrarConfirmacion()
+    {
+        MostrarConfirmacion = false;
+        TratamientoPendienteDesactivar = null;
+    }
+
+    private void SolicitarActivacion(TratamientoDto tratamiento)
+    {
+        TratamientoPendienteActivar = tratamiento;
+        MostrarConfirmacionActivacion = true;
+    }
+
+    private async Task ConfirmarActivacionAsync()
+    {
+        if (TratamientoPendienteActivar == null)
+            return;
+
+        try
+        {
+            Activando = true;
+
+            using var response = await TratamientosApi.ActivarAsync(
+                TratamientoPendienteActivar.IdTratamiento);
+
+            if (!response.IsSuccessStatusCode)
+            {
+                throw new Exception(await ObtenerErrorAsync(response));
+            }
+
+            ToastService.Mostrar(
+                "Éxito",
+                "Tratamiento reactivado correctamente.",
+                ToastTipo.Exito);
+
+            CerrarConfirmacionActivacion();
+            await CargarAsync();
+        }
+        catch (Exception ex)
+        {
+            ToastService.Mostrar(
+                "Error",
+                ex.Message,
+                ToastTipo.Error);
+        }
+        finally
+        {
+            Activando = false;
+        }
+    }
+
+    private void CerrarConfirmacionActivacion()
+    {
+        MostrarConfirmacionActivacion = false;
+        TratamientoPendienteActivar = null;
+    }
+
+    private static async Task<string> ObtenerErrorAsync(
+        HttpResponseMessage response)
+    {
+        var contenido = await response.Content.ReadAsStringAsync();
+
+        if (string.IsNullOrWhiteSpace(contenido))
+        {
+            return $"La operación no se pudo completar. Código HTTP: {(int)response.StatusCode}.";
+        }
+
+        return $"La operación no se pudo completar: {contenido}";
+    }
+
+    private void ReiniciarPaginacion()
+    {
+        _paginacion.Reiniciar();
+    }
+
+    private void IrAPagina(int pagina)
+    {
+        _paginacion.IrA(pagina, TotalFiltrados);
+    }
+
+    private void CambiarTamanoPagina(int tamano)
+    {
+        _paginacion.CambiarTamano(tamano);
+    }
+
+    public sealed class TratamientoForm
+    {
+        [Required(ErrorMessage = "El código del tratamiento es obligatorio.")]
+        [StringLength(20, ErrorMessage = "El código no puede superar los 20 caracteres.")]
+        public string CodigoTratamiento { get; set; } = string.Empty;
+
+        [Required(ErrorMessage = "El nombre del tratamiento es obligatorio.")]
+        [StringLength(150, ErrorMessage = "El nombre no puede superar los 150 caracteres.")]
+        public string Nombre { get; set; } = string.Empty;
+
+        [StringLength(500, ErrorMessage = "La descripción no puede superar los 500 caracteres.")]
+        public string? Descripcion { get; set; }
+
+        [Range(typeof(decimal), "0", "99999999.99",
+            ErrorMessage = "El precio debe ser mayor o igual a cero.")]
+        public decimal Precio { get; set; }
+    }
+}

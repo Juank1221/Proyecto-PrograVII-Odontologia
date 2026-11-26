@@ -1,0 +1,282 @@
+@using GestionOdontologica.Frontend.Models
+
+<section class="card table-card" aria-labelledby="productos-title">
+    <div class="table-card__header">
+        <div class="table-title-group">
+            <div class="icon-tile icon-tile--soft" aria-hidden="true"><svg class="icon"><use href="#icon-clipboard-list"></use></svg></div>
+            <div>
+                <div class="title-line"><h2 id="productos-title">Inventario</h2><span class="count-badge">@ConteoFiltrado</span></div>
+                <p>Control de productos e insumos odontológicos</p>
+            </div>
+        </div>
+        <div class="table-actions">
+            <label class="search-box" for="productoSearch">
+                <svg class="icon search-icon" aria-hidden="true"><use href="#icon-search"></use></svg>
+                <input id="productoSearch" type="search" placeholder="Buscar por código, nombre o categoría..." @bind="Filtro" @bind:event="oninput" />
+            </label>
+            <button type="button" class="icon-button icon-button--soft @(Cargando ? "is-spinning" : string.Empty)" aria-label="Actualizar inventario" disabled="@Cargando" @onclick="RefrescarAsync">
+                <svg class="icon"><use href="#icon-refresh"></use></svg>
+            </button>
+        </div>
+    </div>
+
+    <div class="table-toolbar">
+        <div class="filter-segmented" role="tablist" aria-label="Filtrar productos por estado">
+            <button type="button" class="filter-tab @(FiltroEstado == "todos" ? "is-active" : "")" @onclick='() => FiltroEstado = "todos"'>Todos <span class="filter-count">@TotalGeneral</span></button>
+            <button type="button" class="filter-tab @(FiltroEstado == "activos" ? "is-active" : "")" @onclick='() => FiltroEstado = "activos"'>Activos <span class="filter-count">@TotalActivos</span></button>
+            <button type="button" class="filter-tab @(FiltroEstado == "inactivos" ? "is-active" : "")" @onclick='() => FiltroEstado = "inactivos"'>Inactivos <span class="filter-count">@TotalInactivos</span></button>
+        </div>
+        <select class="filter-role-select" aria-label="Filtrar por categoría" @bind="FiltroCategoria">
+            <option value="">Todas las categorías</option>
+            @foreach (var categoria in Categorias)
+            {
+                <option value="@categoria">@categoria</option>
+            }
+        </select>
+    </div>
+
+    <div class="table-wrap table-wrap--inventory" aria-live="polite">
+        @if (Cargando)
+        {
+            <div class="table-state"><span class="auth-boot__spinner"></span><p>Cargando inventario...</p></div>
+        }
+        else if (Error is not null)
+        {
+            <div class="table-state"><h3>No se pudo cargar el inventario</h3><p>@Error</p><button type="button" class="button button--primary" @onclick="RefrescarAsync">Reintentar</button></div>
+        }
+        else if (ProductosFiltrados.Count == 0)
+        {
+            <div class="table-state"><h3>No hay productos para mostrar</h3><p>Prueba con otros filtros o registra un producto nuevo.</p></div>
+        }
+        else
+        {
+            <table class="users-table inventory-table">
+                <thead>
+                    <tr>
+                        <th class="col-codigo">Código</th>
+                        <th class="col-producto">Producto</th>
+                        <th class="col-descripcion">Descripción</th>
+                        <th class="col-categoria">Categoría</th>
+                        <th class="col-unidad">Unidad</th>
+                        <th class="col-precio">Precio costo</th>
+                        <th class="col-precio">Precio venta</th>
+                        <th class="col-caducidad">Caducidad</th>
+                        <th class="col-estado">Estado</th>
+                        <th class="col-acciones">Acciones</th>
+                    </tr>
+                </thead>
+
+                <tbody>
+                    @foreach (var producto in ProductosVisibles)
+                    {
+                        var esEditando = IdProductoEditando.HasValue && IdProductoEditando.Value == producto.Producto.IdProducto;
+                        <tr @key="producto.Producto.IdProducto" class="@producto.ClaseFila @(esEditando ? "user-row--editing" : string.Empty)">
+                            <td class="col-codigo">
+                                <strong>@producto.Producto.Codigo</strong>
+                            </td>
+
+                            <td class="col-producto">
+                                <strong class="product-name">
+                                    @producto.Producto.Nombre
+                                </strong>
+                            </td>
+
+                            <td class="col-descripcion">
+                                <span class="product-description"
+                                      title="@producto.Producto.Descripcion">
+                                    @producto.Producto.Descripcion
+                                </span>
+                            </td>
+
+                            <td class="col-categoria">
+                                <span>@producto.Producto.NombreCategoria</span>
+                            </td>
+
+                            <td class="col-unidad">
+                                @producto.Producto.UnidadMedida
+                            </td>
+
+                            <td class="col-precio">
+                                @producto.PrecioCostoTexto
+                            </td>
+
+                            <td class="col-precio">
+                                @producto.PrecioVentaTexto
+                            </td>
+
+                            <td class="col-caducidad">
+                                <span class="@(producto.Producto.RequiereCaducidad
+                                      ? "expiration-yes"
+                                      : "expiration-no")">
+                                    @(producto.Producto.RequiereCaducidad ? "Sí" : "No")
+                                </span>
+                            </td>
+
+                            <td class="col-estado">
+                                <span class="status-pill @(producto.Activo
+                                      ? "status-pill--active"
+                                      : "status-pill--inactive")">
+                                    <span aria-hidden="true"></span>
+                                    @(producto.Activo ? "Activo" : "Inactivo")
+                                </span>
+                            </td>
+
+                            <td class="table-actions-cell col-acciones">
+                                <div class="action-buttons-group">
+                                    @if (PuedeEditar)
+                                    {
+                                        <button type="button"
+                                                class="btn-action btn-action--edit @(esEditando ? "is-selected" : string.Empty)"
+                                                title="Editar datos de @producto.Producto.Nombre"
+                                                aria-label="Editar datos de @producto.Producto.Nombre"
+                                                @onclick="() => EditarAsync(producto.Producto)">
+                                            <svg class="icon" aria-hidden="true"><use href="#icon-edit"></use></svg>
+                                            <span>Editar</span>
+                                        </button>
+                                    }
+
+                                    @if (PuedeDesactivar && producto.Activo)
+                                    {
+                                        <button type="button"
+                                                class="btn-action btn-action--danger"
+                                                title="Dar de baja a @producto.Producto.Nombre"
+                                                aria-label="Dar de baja a @producto.Producto.Nombre"
+                                                @onclick="() => DesactivarAsync(producto.Producto)">
+                                            <svg class="icon" aria-hidden="true"><use href="#icon-package-x"></use></svg>
+                                            <span>Desactivar</span>
+                                        </button>
+                                    }
+                                    else if (PuedeDesactivar)
+                                    {
+                                        <button type="button"
+                                                class="btn-action btn-action--success"
+                                                title="Reactivar a @producto.Producto.Nombre"
+                                                aria-label="Reactivar a @producto.Producto.Nombre"
+                                                @onclick="() => ReactivarAsync(producto.Producto)">
+                                            <svg class="icon" aria-hidden="true"><use href="#icon-user-check"></use></svg>
+                                            <span>Activar</span>
+                                        </button>
+                                    }
+
+                                    @if (!PuedeEditar && !PuedeDesactivar)
+                                    {
+                                        <span class="table-footer__hint">Sin acciones disponibles</span>
+                                    }
+                                </div>
+                            </td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        }
+    </div>
+
+    <DataPagination TotalRegistros="ProductosFiltrados.Count"
+                    PaginaActual="_paginacion.PaginaEfectiva(ProductosFiltrados.Count)"
+                    TamanoPagina="_paginacion.Tamano"
+                    Singular="producto"
+                    Plural="productos"
+                    OnPaginaCambiada="IrAPagina"
+                    OnTamanoCambiado="CambiarTamanoPagina" />
+
+    <div class="table-footer">
+        <span>@Resumen</span>
+        <span class="table-footer__hint">Datos sincronizados con Oracle Database</span>
+    </div>
+</section>
+
+@code {
+    [Parameter] public IReadOnlyList<ProductoVista> Productos { get; set; } = Array.Empty<ProductoVista>();
+    [Parameter] public int? IdProductoEditando { get; set; }
+    [Parameter] public bool Cargando { get; set; }
+    [Parameter] public string? Error { get; set; }
+    [Parameter] public EventCallback<ProductoDto> OnEditar { get; set; }
+    [Parameter] public EventCallback<ProductoDto> OnDesactivar { get; set; }
+    [Parameter] public EventCallback<ProductoDto> OnReactivar { get; set; }
+    [Parameter] public EventCallback OnRefrescar { get; set; }
+    [Parameter] public bool PuedeEditar { get; set; } = true;
+    [Parameter] public bool PuedeDesactivar { get; set; } = true;
+
+    private readonly Paginacion _paginacion = new();
+
+    private string _filtro = string.Empty;
+    private string _filtroEstado = "todos";
+    private string _filtroCategoria = string.Empty;
+
+    private string Filtro
+    {
+        get => _filtro;
+        set
+        {
+            _filtro = value;
+            _paginacion.Reiniciar();
+        }
+    }
+
+    private string FiltroEstado
+    {
+        get => _filtroEstado;
+        set
+        {
+            _filtroEstado = value;
+            _paginacion.Reiniciar();
+        }
+    }
+
+    private string FiltroCategoria
+    {
+        get => _filtroCategoria;
+        set
+        {
+            _filtroCategoria = value;
+            _paginacion.Reiniciar();
+        }
+    }
+
+    private IEnumerable<string> Categorias => Productos.Select(p => p.Producto.NombreCategoria).Where(c => !string.IsNullOrWhiteSpace(c)).Distinct(StringComparer.OrdinalIgnoreCase).OrderBy(c => c);
+    private int TotalGeneral => Productos.Count;
+    private int TotalActivos => Productos.Count(p => p.Activo);
+    private int TotalInactivos => Productos.Count(p => !p.Activo);
+    private List<ProductoVista> ProductosFiltrados => Productos.Where(Coincide).ToList();
+    private List<ProductoVista> ProductosVisibles => _paginacion.Aplicar(ProductosFiltrados).ToList();
+    private int ConteoFiltrado => ProductosFiltrados.Count;
+
+    private string Resumen
+    {
+        get
+        {
+            if (Cargando) return "Cargando productos...";
+            if (Error is not null) return "No se pudo cargar el inventario";
+
+            var total = Productos.Count;
+            if (total == 0) return "Sin productos registrados";
+
+            var visibles = ProductosFiltrados.Count;
+            var filtrosActivos = !string.IsNullOrWhiteSpace(_filtro)
+                || _filtroEstado != "todos"
+                || !string.IsNullOrWhiteSpace(_filtroCategoria);
+
+            return filtrosActivos
+                ? $"{visibles} de {total} productos coinciden con los filtros"
+                : $"{total} {(total == 1 ? "producto registrado" : "productos registrados")}";
+        }
+    }
+
+    private bool Coincide(ProductoVista producto)
+    {
+        var texto = _filtro.Trim();
+        var coincideTexto = texto.Length == 0 || producto.Producto.Codigo.Contains(texto, StringComparison.OrdinalIgnoreCase) || producto.Producto.Nombre.Contains(texto, StringComparison.OrdinalIgnoreCase) || producto.Producto.NombreCategoria.Contains(texto, StringComparison.OrdinalIgnoreCase);
+        var coincideEstado = _filtroEstado == "todos" || (_filtroEstado == "activos" && producto.Activo) || (_filtroEstado == "inactivos" && !producto.Activo);
+        var coincideCategoria = string.IsNullOrEmpty(_filtroCategoria) || string.Equals(producto.Producto.NombreCategoria, _filtroCategoria, StringComparison.OrdinalIgnoreCase);
+        return coincideTexto && coincideEstado && coincideCategoria;
+    }
+
+    private void IrAPagina(int pagina) => _paginacion.IrA(pagina, ProductosFiltrados.Count);
+
+    private void CambiarTamanoPagina(int tamano) => _paginacion.CambiarTamano(tamano);
+
+    private Task EditarAsync(ProductoDto producto) => OnEditar.InvokeAsync(producto);
+    private Task DesactivarAsync(ProductoDto producto) => OnDesactivar.InvokeAsync(producto);
+    private Task ReactivarAsync(ProductoDto producto) => OnReactivar.InvokeAsync(producto);
+    private Task RefrescarAsync() => OnRefrescar.InvokeAsync();
+}
